@@ -488,3 +488,4 @@ export const defaultSiteContent: SiteContentData = {
     ],
   },
 };
+

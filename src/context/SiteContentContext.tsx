@@ -69,3 +69,4 @@ export function SiteContentProvider({ children }: { children: React.ReactNode })
 export function useSiteContent() {
   return useContext(SiteContentContext);
 }
+

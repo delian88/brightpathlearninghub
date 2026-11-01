@@ -19,31 +19,29 @@ export default function Navbar({ onOpenBooking }: NavbarProps) {
     <header className="site-header">
       <div className="container">
         <div className="header-inner">
-          {/* Brand Logo & Title */}
+          {/* Brand Logo & Website Name (Always Visible) */}
           <Link href="/" className="brand-wrapper" title={general.siteName}>
-            <div style={{ position: "relative", width: 50, height: 50 }}>
-              <Image
-                src="/logo.png"
-                alt={`${general.siteName} Logo`}
-                width={50}
-                height={50}
-                className="brand-logo-img"
-                priority
-              />
-            </div>
+            <Image
+              src="/logo.png"
+              alt={`${general.siteName} Logo`}
+              width={46}
+              height={46}
+              className="brand-logo-img"
+              priority
+            />
             <div className="brand-text">
-              <span className="brand-title">Bright Path</span>
-              <span className="brand-badge">Learning Hub • Reg. #{general.registrationNo}</span>
+              <span className="brand-title">{general.siteName || "Bright Path Learning Hub"}</span>
+              <span className="brand-badge">Govt. Reg. #{general.registrationNo} • KG – Grade 8</span>
             </div>
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="nav-links" aria-label="Main Navigation">
-            <a href="#courses" className="nav-link">Flagship Courses</a>
-            <a href="#why-us" className="nav-link">Why Bright Path</a>
-            <a href="#testimonials" className="nav-link">Parent Stories</a>
-            <a href="#achievers" className="nav-link">Shining Stars</a>
-            <a href="#guarantee" className="nav-link">100% Guarantee</a>
+            <a href="#courses" className="nav-link">Courses</a>
+            <a href="#why-us" className="nav-link">Why Us</a>
+            <a href="#testimonials" className="nav-link">Reviews</a>
+            <a href="#achievers" className="nav-link">Achievers</a>
+            <a href="#guarantee" className="nav-link">Guarantee</a>
             <a href="#faq" className="nav-link">FAQs</a>
           </nav>
 
@@ -52,12 +50,11 @@ export default function Navbar({ onOpenBooking }: NavbarProps) {
             {/* Student Portal Login */}
             <Link
               href="/portal"
-              className="btn btn-navy"
-              style={{ padding: "8px 12px", fontSize: "0.8rem" }}
+              className="btn btn-navy header-btn-login"
               title="Student & Parent Portal Login"
             >
               <UserCheck size={16} />
-              <span className="nav-btn-label">Student Login</span>
+              <span className="header-action-label">Student Login</span>
             </Link>
 
             {/* WhatsApp Connect */}
@@ -65,21 +62,19 @@ export default function Navbar({ onOpenBooking }: NavbarProps) {
               href={`https://wa.me/${general.whatsapp.replace(/[^0-9]/g, "")}?text=Hi%20Bright%20Path%20Learning%20Hub,%20I%20would%20like%20to%20know%20more%20about%20your%201:1%20kids%20classes.`}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn btn-whatsapp shining"
-              style={{ padding: "8px 12px", fontSize: "0.82rem" }}
+              className="btn btn-whatsapp shining header-btn-wa"
               title="Connect on WhatsApp"
             >
-              <MessageCircle size={18} />
-              <span className="nav-btn-label">WhatsApp</span>
+              <MessageCircle size={17} />
+              <span className="header-action-label">WhatsApp</span>
             </a>
 
             {/* Book Demo Button */}
             <button
               onClick={() => onOpenBooking()}
-              className="btn btn-primary shining"
-              style={{ padding: "8px 14px", fontSize: "0.82rem" }}
+              className="btn btn-primary shining header-btn-book"
             >
-              <Calendar size={17} />
+              <Calendar size={16} />
               <span>Book Demo</span>
             </button>
 
@@ -87,14 +82,6 @@ export default function Navbar({ onOpenBooking }: NavbarProps) {
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Toggle mobile menu"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 8,
-                background: "var(--bg-main)",
-                borderRadius: "var(--radius-sm)",
-              }}
               className="mobile-toggle-btn"
             >
               {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -131,7 +118,12 @@ export default function Navbar({ onOpenBooking }: NavbarProps) {
             <a href="#faq" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
               Frequently Asked Questions
             </a>
-            <Link href="/portal" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
+            <Link
+              href="/portal"
+              className="nav-link"
+              style={{ color: "var(--bp-navy-800)", fontWeight: 700 }}
+              onClick={() => setMobileMenuOpen(false)}
+            >
               🔐 Student Portal Login
             </Link>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, paddingTop: 10, borderTop: "1px solid var(--border-light)" }}>

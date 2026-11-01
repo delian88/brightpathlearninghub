@@ -31,7 +31,7 @@ const siteBaseUrl =
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
-    : "https://brightpathlearninghub.com");
+    : "https://brightpathlearninghub.vercel.app");
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteBaseUrl),
