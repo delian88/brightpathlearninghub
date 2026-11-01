@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveLead, getLeads } from "@/db";
+import { sendNewLeadEmail } from "@/lib/email";
 
 export async function GET() {
   try {
@@ -32,11 +33,20 @@ export async function POST(request: Request) {
       source: String(source).trim(),
     });
 
+    let emailSent = false;
+    try {
+      const emailResult = await sendNewLeadEmail(lead);
+      emailSent = emailResult.sent;
+    } catch (emailErr) {
+      console.error("Failed to send new lead email notification:", emailErr);
+    }
+
     return NextResponse.json(
       {
         success: true,
         message: "Thank you! Our counseling team will send details via WhatsApp shortly.",
         lead,
+        emailSent,
       },
       { status: 201 }
     );

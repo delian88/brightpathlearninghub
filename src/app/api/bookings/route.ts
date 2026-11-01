@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { saveDemoBooking, getDemoBookings } from "@/db";
+import { sendDemoBookingEmails } from "@/lib/email";
 
 export async function GET() {
   try {
@@ -53,11 +54,20 @@ export async function POST(request: Request) {
       notes: notes ? String(notes).trim() : null,
     });
 
+    let emailSent = false;
+    try {
+      const emailResult = await sendDemoBookingEmails(booking);
+      emailSent = emailResult.sent;
+    } catch (emailErr) {
+      console.error("Failed to send booking notification emails:", emailErr);
+    }
+
     return NextResponse.json(
       {
         success: true,
         message: "Demo class booked successfully! Our academic counselor will reach out shortly.",
         booking,
+        emailSent,
       },
       { status: 201 }
     );

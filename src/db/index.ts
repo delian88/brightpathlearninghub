@@ -107,7 +107,7 @@ export async function getDemoBookings(): Promise<schema.DemoBooking[]> {
   if (db) {
     try {
       const results = await db.select().from(schema.demoBookings).orderBy(schema.demoBookings.createdAt);
-      if (results && results.length > 0) return results.reverse();
+      if (results) return results.reverse();
     } catch (err) {
       console.error("Drizzle database select failed, falling back to memory store:", err);
     }
@@ -141,7 +141,7 @@ export async function getLeads(): Promise<schema.Lead[]> {
   if (db) {
     try {
       const results = await db.select().from(schema.leads).orderBy(schema.leads.createdAt);
-      if (results && results.length > 0) return results.reverse();
+      if (results) return results.reverse();
     } catch (err) {
       console.error("Drizzle database select leads failed, falling back to memory store:", err);
     }

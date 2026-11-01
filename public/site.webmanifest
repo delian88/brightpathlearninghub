@@ -1,0 +1,21 @@
+{
+  "name": "Bright Path Learning Hub",
+  "short_name": "Bright Path",
+  "description": "1-on-1 LIVE Online Classes for Kids in English Phonics, Public Speaking, Coding, and Math.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b2545",
+  "theme_color": "#0b2545",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

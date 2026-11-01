@@ -131,6 +131,14 @@ export default function BookingModal({
                 Thank you, <strong>{successData.parentName}</strong>! We have reserved a complimentary
                 1-on-1 session for <strong>{successData.studentName}</strong> in{" "}
                 <strong>{successData.courseName}</strong> ({successData.grade}).
+                {successData.email && (
+                  <>
+                    <br />
+                    <span style={{ fontSize: "0.84rem", color: "var(--bp-green-600)", fontWeight: 600 }}>
+                      ✉️ A confirmation email has been sent to {successData.email}.
+                    </span>
+                  </>
+                )}
               </p>
 
               <div
@@ -288,13 +296,14 @@ export default function BookingModal({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Email Address (Optional)</label>
+                  <label className="form-label">Email Address</label>
                   <input
                     type="email"
                     className="form-input"
                     placeholder="parent@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    required
                   />
                 </div>
               </div>

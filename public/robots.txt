@@ -1,0 +1,30 @@
+# Robots.txt for Bright Path Learning Hub
+# Allow Google and all search engines to crawl all public pages
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: Mediapartners-Google
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+Sitemap: https://brightpathlearninghub.com/sitemap.xml
+Host: https://brightpathlearninghub.com
