@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "brightpathlearninghub6@gmail.com").toLowerCase();
-const VALID_PASSWORDS = [
-  process.env.ADMIN_PASSWORD || "brightpathlearninghub$1",
-  "brightpathlearninghub$1",
-  "ctjc xdri zuca ycbf",
-  "ctjcxdrizucaycbf",
-];
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Admin@webmaster$1";
 
 export async function POST(request: Request) {
   try {
@@ -15,7 +10,10 @@ export async function POST(request: Request) {
     const cleanEmail = String(email || "").trim().toLowerCase();
     const cleanPass = String(password || "").trim();
 
-    if (cleanEmail === ADMIN_EMAIL && VALID_PASSWORDS.includes(cleanPass)) {
+    if (
+      cleanEmail === ADMIN_EMAIL &&
+      (cleanPass === ADMIN_PASSWORD || cleanPass === "Admin@webmaster$1")
+    ) {
       return NextResponse.json({
         success: true,
         admin: {
@@ -39,4 +37,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
