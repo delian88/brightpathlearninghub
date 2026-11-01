@@ -62,8 +62,12 @@ type ActiveView =
 export default function AdminDashboardPage() {
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authStep, setAuthStep] = useState<"credentials" | "otp">("credentials");
   const [loginEmail, setLoginEmail] = useState("brightpathlearninghub6@gmail.com");
   const [loginPassword, setLoginPassword] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpToken, setOtpToken] = useState("");
+  const [otpSuccessMsg, setOtpSuccessMsg] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
@@ -155,14 +159,26 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     setAuthLoading(true);
     setAuthError("");
+    setOtpSuccessMsg("");
     try {
       const res = await fetch("/api/admin/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+        body: JSON.stringify({
+          step: "login",
+          email: loginEmail,
+          password: loginPassword,
+        }),
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.requireOtp) {
+        setOtpToken(data.otpToken);
+        setOtpCode("");
+        setAuthStep("otp");
+        setOtpSuccessMsg(
+          data.message || "A 6-digit OTP verification code has been sent to your email."
+        );
+      } else if (data.success && data.verified) {
         sessionStorage.setItem("bp_admin_auth", "true");
         setIsAuthenticated(true);
       } else {
@@ -175,10 +191,71 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      const res = await fetch("/api/admin/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          step: "verify-otp",
+          email: loginEmail,
+          otpCode,
+          otpToken,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.verified) {
+        sessionStorage.setItem("bp_admin_auth", "true");
+        setIsAuthenticated(true);
+      } else {
+        setAuthError(data.message || "Invalid OTP code.");
+      }
+    } catch {
+      setAuthError("Connection error while verifying OTP.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setAuthLoading(true);
+    setAuthError("");
+    setOtpSuccessMsg("");
+    try {
+      const res = await fetch("/api/admin/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          step: "login",
+          email: loginEmail,
+          password: loginPassword,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.requireOtp) {
+        setOtpToken(data.otpToken);
+        setOtpCode("");
+        setOtpSuccessMsg("A new 6-digit OTP code has been sent to your email.");
+      } else {
+        setAuthError(data.message || "Could not resend OTP.");
+      }
+    } catch {
+      setAuthError("Connection error.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     sessionStorage.removeItem("bp_admin_auth");
     setIsAuthenticated(false);
+    setAuthStep("credentials");
     setLoginPassword("");
+    setOtpCode("");
+    setOtpToken("");
   };
 
   const handleConfirmBooking = async (booking: any) => {
@@ -460,15 +537,34 @@ export default function AdminDashboardPage() {
                 marginBottom: 8,
               }}
             >
-              ADMINISTRATION PORTAL
+              {authStep === "otp" ? "2-STEP OTP VERIFICATION" : "ADMINISTRATION PORTAL"}
             </span>
             <h1 style={{ fontSize: "1.45rem", fontWeight: 800, color: "#071527", margin: 0 }}>
-              Bright Path Control Center
+              {authStep === "otp" ? "Enter Email OTP Code" : "Bright Path Control Center"}
             </h1>
             <p style={{ fontSize: "0.86rem", color: "#64748b", marginTop: 6 }}>
-              Sign in with your administrator credentials to manage bookings, student logins, and website content.
+              {authStep === "otp"
+                ? `We sent a 6-digit confirmation code to ${loginEmail}`
+                : "Sign in with your administrator credentials to receive your 6-digit login OTP."}
             </p>
           </div>
+
+          {otpSuccessMsg && authStep === "otp" && (
+            <div
+              style={{
+                background: "#ecfdf5",
+                color: "#065f46",
+                padding: "12px 14px",
+                borderRadius: 12,
+                fontSize: "0.84rem",
+                fontWeight: 600,
+                marginBottom: 18,
+                border: "1px solid #a7f3d0",
+              }}
+            >
+              ✉️ {otpSuccessMsg}
+            </div>
+          )}
 
           {authError && (
             <div
@@ -487,61 +583,142 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          <form onSubmit={handleAdminLogin}>
-            <div className="form-group">
-              <label className="form-label">Administrator Email</label>
-              <input
-                type="email"
-                className="form-input"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="brightpathlearninghub6@gmail.com"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Password</label>
-              <div style={{ position: "relative" }}>
+          {authStep === "credentials" ? (
+            <form onSubmit={handleAdminLogin}>
+              <div className="form-group">
+                <label className="form-label">Administrator Email</label>
                 <input
-                  type={showPass ? "text" : "password"}
+                  type="email"
                   className="form-input"
-                  style={{ paddingRight: 42 }}
-                  placeholder="Enter admin password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="brightpathlearninghub6@gmail.com"
                   required
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Password</label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type={showPass ? "text" : "password"}
+                    className="form-input"
+                    style={{ paddingRight: 42 }}
+                    placeholder="Enter admin password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    style={{
+                      position: "absolute",
+                      right: 12,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: "#64748b",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                    aria-label="Toggle password visibility"
+                  >
+                    {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="btn btn-primary shining"
+                style={{ width: "100%", padding: "14px", fontSize: "0.96rem", marginTop: 10 }}
+              >
+                <Lock size={17} />
+                <span>{authLoading ? "Sending OTP Email..." : "Continue & Send OTP Email"}</span>
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOtp}>
+              <div className="form-group">
+                <label className="form-label" style={{ textAlign: "center" }}>
+                  6-Digit Verification Code
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  className="form-input"
+                  style={{
+                    textAlign: "center",
+                    fontSize: "1.65rem",
+                    fontWeight: 800,
+                    letterSpacing: "10px",
+                    fontFamily: "monospace",
+                    padding: "14px",
+                  }}
+                  placeholder="000000"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ""))}
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={authLoading || otpCode.length !== 6}
+                className="btn btn-primary shining"
+                style={{ width: "100%", padding: "14px", fontSize: "0.96rem", marginTop: 8 }}
+              >
+                <ShieldCheck size={18} />
+                <span>{authLoading ? "Verifying OTP..." : "Verify OTP & Enter Dashboard"}</span>
+              </button>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginTop: 16,
+                  fontSize: "0.82rem",
+                }}
+              >
                 <button
                   type="button"
-                  onClick={() => setShowPass(!showPass)}
+                  onClick={() => {
+                    setAuthStep("credentials");
+                    setAuthError("");
+                    setOtpSuccessMsg("");
+                  }}
                   style={{
-                    position: "absolute",
-                    right: 12,
-                    top: "50%",
-                    transform: "translateY(-50%)",
                     color: "#64748b",
+                    fontWeight: 600,
                     background: "none",
                     border: "none",
                     cursor: "pointer",
                   }}
-                  aria-label="Toggle password visibility"
                 >
-                  {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                  ← Back to Login
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={authLoading}
+                  style={{
+                    color: "#1d4ed8",
+                    fontWeight: 700,
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Resend OTP Code
                 </button>
               </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={authLoading}
-              className="btn btn-primary shining"
-              style={{ width: "100%", padding: "14px", fontSize: "0.96rem", marginTop: 10 }}
-            >
-              <Lock size={17} />
-              <span>{authLoading ? "Signing In..." : "Sign In to Dashboard"}</span>
-            </button>
-          </form>
+            </form>
+          )}
 
           <div
             style={{

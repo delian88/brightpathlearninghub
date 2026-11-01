@@ -4,7 +4,9 @@ import postgres from "postgres";
 import * as schema from "./schema";
 import { defaultSiteContent, type SiteContentData } from "@/lib/defaultSiteContent";
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString =
+  process.env.DATABASE_URL ||
+  "postgresql://postgres.ecyjjmctrdmkrggrbagw:brightpathlearninghub%241@aws-0-eu-west-1.pooler.supabase.com:5432/postgres";
 
 let dbInstance: ReturnType<typeof drizzle<typeof schema>> | null = null;
 

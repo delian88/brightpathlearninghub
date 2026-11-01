@@ -1,8 +1,19 @@
 import { NextResponse } from "next/server";
 import { authenticateStudentAccount } from "@/db";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rateLimit";
 
 export async function POST(request: Request) {
   try {
+    const rl = checkRateLimit(request, {
+      namespace: "student-portal-login",
+      maxRequests: 8,
+      windowMs: 10 * 60 * 1000,
+    });
+
+    if (!rl.allowed) {
+      return rateLimitExceededResponse(rl.retryAfterSeconds, rl.headers);
+    }
+
     const { username, password } = await request.json();
 
     if (!username || !password) {

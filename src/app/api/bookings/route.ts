@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { saveDemoBooking, getDemoBookings, updateDemoBookingStatus } from "@/db";
 import { sendDemoBookingEmails } from "@/lib/email";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/rateLimit";
 
 export async function GET() {
   try {
@@ -17,6 +18,16 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const rl = checkRateLimit(request, {
+      namespace: "demo-bookings-post",
+      maxRequests: 10,
+      windowMs: 15 * 60 * 1000,
+    });
+
+    if (!rl.allowed) {
+      return rateLimitExceededResponse(rl.retryAfterSeconds, rl.headers);
+    }
+
     const body = await request.json();
 
     const {

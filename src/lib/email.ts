@@ -5,7 +5,7 @@ const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
 const smtpPort = Number(process.env.SMTP_PORT || 465);
 const smtpSecure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : smtpPort === 465;
 const smtpUser = process.env.SMTP_USER || "brightpathlearninghub6@gmail.com";
-const smtpPass = process.env.SMTP_PASS || "";
+const smtpPass = process.env.SMTP_PASS || "ctjc xdri zuca ycbf";
 const smtpFrom =
   process.env.SMTP_FROM || `"Bright Path Learning Hub" <${smtpUser}>`;
 const adminEmail = process.env.ADMIN_EMAIL || smtpUser;
@@ -340,6 +340,72 @@ export async function sendNewLeadEmail(lead: Lead) {
     from: smtpFrom,
     to: adminEmail,
     subject: `New Website Lead: ${lead.countryCode || ""} ${lead.phoneNumber}`,
+    html,
+  });
+
+  return { sent: true };
+}
+
+export async function sendAdminLoginOtpEmail(
+  targetEmail: string,
+  otpCode: string,
+  clientIp: string,
+  userAgent: string
+) {
+  const transporter = getTransporter();
+  if (!transporter) return { sent: false, reason: "SMTP not configured" };
+
+  const timestamp = new Date().toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  });
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 580px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.06);">
+      <div style="background: linear-gradient(135deg, #071527 0%, #133e87 100%); color: #ffffff; padding: 28px 24px; text-align: center;">
+        <div style="display: inline-block; background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 4px 14px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; margin-bottom: 10px;">
+          SECURITY VERIFICATION • 2-STEP AUTHENTICATION
+        </div>
+        <h1 style="margin: 0; font-size: 22px; color: #ffffff;">Admin Portal Login OTP Code</h1>
+        <p style="margin: 6px 0 0; color: #cbd5e1; font-size: 13px;">Bright Path Learning Hub — Control Center</p>
+      </div>
+
+      <div style="padding: 28px 24px; background: #ffffff; color: #1e293b; line-height: 1.6;">
+        <p style="margin: 0 0 14px;">Hello Administrator,</p>
+        <p style="margin: 0 0 20px;">A sign-in attempt was initiated on the <strong>Bright Path Learning Hub Admin Dashboard</strong>. Enter the 6-digit One-Time Password (OTP) below to complete your sign-in:</p>
+
+        <div style="background: #f8fafc; border: 2px dashed #0284c7; border-radius: 14px; padding: 22px; text-align: center; margin: 22px 0;">
+          <div style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+            Your 6-Digit Verification Code
+          </div>
+          <div style="font-family: 'Courier New', Courier, monospace; font-size: 36px; font-weight: 800; letter-spacing: 10px; color: #071527;">
+            ${otpCode}
+          </div>
+          <div style="font-size: 12px; color: #dc2626; font-weight: 700; margin-top: 8px;">
+            ⏳ Valid for 10 minutes • Do not share this code
+          </div>
+        </div>
+
+        <div style="background: #f1f5f9; border-radius: 10px; padding: 14px 16px; font-size: 13px; color: #475569; margin-top: 20px;">
+          <div style="font-weight: 700; color: #0f172a; margin-bottom: 6px;">Login Request Details:</div>
+          <div><strong>Time:</strong> ${timestamp}</div>
+          <div><strong>IP Address:</strong> ${clientIp}</div>
+          <div><strong>Device / Browser:</strong> ${userAgent.slice(0, 100)}</div>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+        <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0;">
+          Bright Path Learning Hub • Kubwa, Abuja • Govt. Reg. No. 9840276<br/>
+          Automated Security Alert — If you did not attempt to sign in, please ignore this email.
+        </p>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from: smtpFrom,
+    to: targetEmail || adminEmail,
+    subject: `${otpCode} is your Bright Path Admin Login OTP Code`,
     html,
   });
 
