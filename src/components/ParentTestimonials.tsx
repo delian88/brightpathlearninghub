@@ -1,43 +1,24 @@
 "use client";
 
 import React, { useState } from "react";
-import { Play, Quote, Star, UserCheck, X } from "lucide-react";
+import { Play, Quote, Star, X } from "lucide-react";
+import { useSiteContent } from "@/context/SiteContentContext";
 
 export default function ParentTestimonials() {
+  const { content } = useSiteContent();
+  const { testimonialsSection } = content;
+
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [videoModalOpen, setVideoModalOpen] = useState(false);
 
-  const testimonials = [
-    {
-      quote:
-        "The teacher explained all the basic concepts to my child with such great patience. Now my daughter can spell and pronounce any word correctly and has become a confident English speaker in her class!",
-      author: "Ritu Sengupta",
-      relation: "Mother of Sharmistha (Grade 2, Phonics & Public Speaking)",
-      rating: 5,
-      city: "Bengaluru",
-      videoUrl: "https://www.youtube.com/embed/Ha97Zv064VE",
-    },
-    {
-      quote:
-        "My son used to be terrified of math word problems. Within just 6 weeks at Bright Path, he started solving visual puzzles faster than anyone in his school class! The 1:1 attention makes a massive difference.",
-      author: "Arjun Verma",
-      relation: "Father of Kabir (Grade 4, Bright Math Program)",
-      rating: 5,
-      city: "Mumbai",
-      videoUrl: "https://www.youtube.com/embed/Ha97Zv064VE",
-    },
-    {
-      quote:
-        "Finding an engaging coding teacher for an 8-year-old was difficult until we discovered Bright Path. Maya built her first interactive animated story in Scratch on week 3. She looks forward to every single session!",
-      author: "Sarah Jenkins",
-      relation: "Mother of Maya (Grade 3, Coding Classes)",
-      rating: 5,
-      city: "London / Global Online",
-      videoUrl: "https://www.youtube.com/embed/Ha97Zv064VE",
-    },
-  ];
-
-  const current = testimonials[activeTestimonial];
+  const testimonials = testimonialsSection.items?.length ? testimonialsSection.items : [];
+  const current = testimonials[activeTestimonial % Math.max(testimonials.length, 1)] || {
+    quote: "",
+    author: "",
+    relation: "",
+    rating: 5,
+    city: "",
+  };
 
   return (
     <section id="testimonials" className="section-padding" style={{ backgroundColor: "#0b2545" }}>
@@ -47,14 +28,13 @@ export default function ParentTestimonials() {
             className="section-pill"
             style={{ background: "rgba(245, 158, 11, 0.2)", color: "#fbbf24" }}
           >
-            Verified Parent Stories
+            {testimonialsSection.pill}
           </span>
           <h2 className="section-title" style={{ color: "#ffffff" }}>
-            Hear It From Our Parents
+            {testimonialsSection.title}
           </h2>
           <p className="section-subtitle" style={{ color: "#94a3b8" }}>
-            Over 50,000 parents trust Bright Path Learning Hub to shape their children&#39;s
-            communication, logic, and self-belief.
+            {testimonialsSection.subtitle}
           </p>
         </div>
 
@@ -67,7 +47,7 @@ export default function ParentTestimonials() {
             </div>
 
             <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
-              {[...Array(current.rating)].map((_, i) => (
+              {[...Array(current.rating || 5)].map((_, i) => (
                 <Star key={i} size={20} fill="#f59e0b" color="#f59e0b" />
               ))}
             </div>
@@ -108,13 +88,11 @@ export default function ParentTestimonials() {
               title="Watch Parent Video Story"
             >
               <div className="video-thumb-overlay" />
-              {/* Fallback image/backdrop */}
               <div
                 style={{
                   position: "absolute",
                   inset: 0,
-                  background:
-                    "linear-gradient(45deg, #071527 0%, #1e3a8a 100%)",
+                  background: "linear-gradient(45deg, #071527 0%, #1e3a8a 100%)",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
@@ -124,10 +102,10 @@ export default function ParentTestimonials() {
                 }}
               >
                 <div style={{ color: "#ffffff", fontSize: "0.95rem", fontWeight: 700, zIndex: 1 }}>
-                  Watch Sharmistha & Mother&#39;s Journey
+                  {testimonialsSection.videoCardTitle}
                 </div>
                 <div style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.8rem", zIndex: 1 }}>
-                  2 min story • Phonics & Confidence
+                  {testimonialsSection.videoCardSubtitle}
                 </div>
               </div>
 
@@ -167,7 +145,7 @@ export default function ParentTestimonials() {
               </div>
               <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
                 <iframe
-                  src="https://www.youtube-nocookie.com/embed/Ha97Zv064VE?autoplay=1"
+                  src={testimonialsSection.videoUrl || "https://www.youtube-nocookie.com/embed/Ha97Zv064VE?autoplay=1"}
                   title="Parent Testimonial Video"
                   style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: 0 }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

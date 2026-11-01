@@ -14,6 +14,7 @@ import CurriculumOverview from "@/components/CurriculumOverview";
 import Footer from "@/components/Footer";
 import BookingModal from "@/components/BookingModal";
 import StickyBottomBar from "@/components/StickyBottomBar";
+import { SiteContentProvider } from "@/context/SiteContentContext";
 
 export default function Home() {
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
@@ -54,49 +55,51 @@ export default function Home() {
   };
 
   return (
-    <main style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      {/* Top Navigation */}
-      <Navbar onOpenBooking={handleOpenBooking} />
+    <SiteContentProvider>
+      <main style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        {/* Top Navigation */}
+        <Navbar onOpenBooking={handleOpenBooking} />
 
-      {/* Hero / First Fold */}
-      <HeroSection onOpenBooking={() => handleOpenBooking()} />
+        {/* Hero / First Fold */}
+        <HeroSection onOpenBooking={() => handleOpenBooking()} />
 
-      {/* 4 Key Differentiators / Strip */}
-      <BenefitsStrip />
+        {/* 4 Key Differentiators / Strip */}
+        <BenefitsStrip />
 
-      {/* Flagship 1:1 Courses */}
-      <CoursesSection onSelectCourse={handleOpenBooking} />
+        {/* Flagship 1:1 Courses */}
+        <CoursesSection onSelectCourse={handleOpenBooking} />
 
-      {/* Why Bright Path Is The Best */}
-      <WhyBrightPath />
+        {/* Why Bright Path Is The Best */}
+        <WhyBrightPath />
 
-      {/* Parent Reviews & Video Stories */}
-      <ParentTestimonials />
+        {/* Parent Reviews & Video Stories */}
+        <ParentTestimonials />
 
-      {/* Student Achievers / Olympiad Winners */}
-      <ShiningStars />
+        {/* Student Achievers / Olympiad Winners */}
+        <ShiningStars />
 
-      {/* 100% Outcome Guarantee & Business Seal */}
-      <OutcomeGuarantee />
+        {/* 100% Outcome Guarantee & Business Seal */}
+        <OutcomeGuarantee />
 
-      {/* FAQs */}
-      <FaqSection />
+        {/* FAQs */}
+        <FaqSection />
 
-      {/* SEO Curriculum Overview Table */}
-      <CurriculumOverview />
+        {/* SEO Curriculum Overview Table */}
+        <CurriculumOverview />
 
-      {/* Footer */}
-      <Footer />
+        {/* Footer */}
+        <Footer />
 
-      {/* Persistent Sticky Bottom Bar */}
-      <StickyBottomBar onOpenBooking={() => handleOpenBooking()} />
+        {/* Persistent Sticky Bottom Bar */}
+        <StickyBottomBar onOpenBooking={() => handleOpenBooking()} />
 
-      {/* Booking Form Modal Flow */}
-      <BookingModal
-        isOpen={bookingModalOpen}
-        onClose={handleCloseBooking}
-        defaultCourse={selectedCourse}
-      />
-    </main>
+        {/* Booking Form Modal Flow */}
+        <BookingModal
+          isOpen={bookingModalOpen}
+          onClose={handleCloseBooking}
+          defaultCourse={selectedCourse}
+        />
+      </main>
+    </SiteContentProvider>
   );
 }

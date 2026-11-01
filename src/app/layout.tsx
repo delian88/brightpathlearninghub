@@ -25,8 +25,16 @@ const outfit = Outfit({
   display: "swap",
 });
 
+const siteBaseUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "https://brightpathlearninghub.com");
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://brightpathlearninghub.com"),
+  metadataBase: new URL(siteBaseUrl),
   title: {
     default: "Bright Path Learning Hub | 1-on-1 LIVE Online Classes for Kids (KG - Grade 8)",
     template: "%s | Bright Path Learning Hub",
@@ -93,22 +101,22 @@ export const metadata: Metadata = {
     title: "Bright Path Learning Hub | 1-on-1 LIVE Online Classes for Kids (KG - Grade 8)",
     description:
       "Beyond textbooks, preparing kids for life. Personalized 1:1 LIVE online classes in English Phonics & Reading, Public Speaking, Coding, and Conceptual Math with 100% Guaranteed Outcome.",
-    url: "https://brightpathlearninghub.com",
+    url: siteBaseUrl,
     siteName: "Bright Path Learning Hub",
     images: [
       {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Bright Path Learning Hub — 1:1 LIVE Online Classes for Kids",
+        url: "/logo.png",
+        width: 1024,
+        height: 1024,
+        alt: "Bright Path Learning Hub Official Logo",
         type: "image/png",
       },
       {
-        url: "/logo.png",
-        width: 800,
-        height: 800,
-        alt: "Bright Path Learning Hub Official Circular Logo",
-        type: "image/png",
+        url: "/logo.jpg",
+        width: 1024,
+        height: 1024,
+        alt: "Bright Path Learning Hub Official Logo",
+        type: "image/jpeg",
       },
     ],
     locale: "en_US",
@@ -119,7 +127,7 @@ export const metadata: Metadata = {
     title: "Bright Path Learning Hub | 1-on-1 LIVE Online Classes for Kids",
     description:
       "Beyond textbooks, preparing kids for life. Expert 1:1 online classes in English Phonics, Public Speaking, Coding, and Math with physical worksheets delivered home.",
-    images: ["/og-image.png"],
+    images: ["/logo.png"],
     creator: "@BrightPathHub",
     site: "@BrightPathHub",
   },

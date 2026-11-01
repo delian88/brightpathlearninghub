@@ -2,13 +2,16 @@
 
 import React from "react";
 import { BookOpen, Mic, Code, Calculator, Check, ArrowRight, Clock, Layers } from "lucide-react";
-import { coursesData } from "@/app/api/courses/route";
+import { useSiteContent } from "@/context/SiteContentContext";
 
 interface CoursesSectionProps {
   onSelectCourse: (courseName: string) => void;
 }
 
 export default function CoursesSection({ onSelectCourse }: CoursesSectionProps) {
+  const { content } = useSiteContent();
+  const { coursesSection } = content;
+
   const getIcon = (id: string) => {
     switch (id) {
       case "english-phonics":
@@ -28,16 +31,13 @@ export default function CoursesSection({ onSelectCourse }: CoursesSectionProps) 
     <section id="courses" className="section-padding">
       <div className="container">
         <div className="section-header">
-          <span className="section-pill">Academic Excellence</span>
-          <h2 className="section-title">Our Flagship 1-on-1 Courses</h2>
-          <p className="section-subtitle">
-            Engineered by child-pedagogy specialists to nurture curiosity, fluency,
-            analytical mindset, and lifelong self-confidence.
-          </p>
+          <span className="section-pill">{coursesSection.pill}</span>
+          <h2 className="section-title">{coursesSection.title}</h2>
+          <p className="section-subtitle">{coursesSection.subtitle}</p>
         </div>
 
         <div className="courses-grid">
-          {coursesData.map((course) => (
+          {coursesSection.courses.map((course) => (
             <div key={course.id} className="course-card">
               {/* Card Header */}
               <div

@@ -2,35 +2,33 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { Star, MessageCircle, CheckCircle2, BookOpen, Trophy, ShieldCheck, ArrowRight } from "lucide-react";
+import { Star, MessageCircle, CheckCircle2, Trophy, ShieldCheck, ArrowRight } from "lucide-react";
+import { useSiteContent } from "@/context/SiteContentContext";
 
 interface HeroSectionProps {
   onOpenBooking: () => void;
 }
 
 export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
+  const { content } = useSiteContent();
+  const { hero, general } = content;
+
   const [phone, setPhone] = useState("");
   const [countryCode, setCountryCode] = useState("+234");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Dynamic Text Typing Animation for Flagship Skills
-  const rotatingWords = [
-    "life.",
-    "public speaking.",
-    "creative coding.",
-    "reading fluency.",
-    "conceptual math.",
-    "future leadership.",
-  ];
+  const rotatingWords = hero.rotatingWords?.length
+    ? hero.rotatingWords
+    : ["life.", "public speaking.", "creative coding.", "reading fluency.", "conceptual math."];
 
   const [wordIndex, setWordIndex] = useState(0);
   const [displayText, setDisplayText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    const currentWord = rotatingWords[wordIndex];
+    const currentWord = rotatingWords[wordIndex % rotatingWords.length];
     let timer: NodeJS.Timeout;
 
     if (isDeleting) {
@@ -48,7 +46,6 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
           setDisplayText(currentWord.substring(0, displayText.length + 1));
         }, 85);
       } else {
-        // Pause once word is completely typed out
         timer = setTimeout(() => {
           setIsDeleting(true);
         }, 2000);
@@ -56,7 +53,7 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
     }
 
     return () => clearTimeout(timer);
-  }, [displayText, isDeleting, wordIndex]);
+  }, [displayText, isDeleting, wordIndex, rotatingWords]);
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,9 +79,9 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
       const data = await res.json();
       if (data.success) {
         setSubmitted(true);
-        // Automatic WhatsApp redirection with new number
         const cleanNumber = phone.replace(/[^0-9]/g, "");
-        const waUrl = `https://wa.me/2348063202616?text=Hello%20Bright%20Path%20Learning%20Hub!%20My%20phone%20is%20${countryCode}${cleanNumber}.%20I%20am%20interested%20in%20online%20classes%20for%20my%20child.`;
+        const waDest = general.whatsapp.replace(/[^0-9]/g, "") || "2348063202616";
+        const waUrl = `https://wa.me/${waDest}?text=Hello%20Bright%20Path%20Learning%20Hub!%20My%20phone%20is%20${countryCode}${cleanNumber}.%20I%20am%20interested%20in%20online%20classes%20for%20my%20child.`;
         window.open(waUrl, "_blank");
       } else {
         setErrorMsg(data.message || "Something went wrong.");
@@ -105,30 +102,26 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
             {/* Pill */}
             <div className="hero-badge-pill">
               <span className="live-dot-pulse" aria-hidden="true" />
-              <span>Personalized Early Childhood Education (KG – Grade 8)</span>
+              <span>{hero.badgeText}</span>
             </div>
 
             {/* Main Title with Real-Time Typing Animation */}
             <h1 className="hero-title">
-              Beyond <span className="highlight-gold">textbooks,</span>
+              {hero.titleLine1Prefix} <span className="highlight-gold">{hero.titleLine1Highlight}</span>
               <br />
-              preparing <span className="highlight-green">kids</span>
+              {hero.titleLine2Prefix} <span className="highlight-green">{hero.titleLine2Highlight}</span>
               <br />
-              for{" "}
+              {hero.titleLine3Prefix}{" "}
               <span className="typed-phrase-wrapper">
                 <span className="highlight-blue typed-word">
-                  {displayText || "life."}
+                  {displayText || rotatingWords[0]}
                 </span>
                 <span className="typing-cursor" aria-hidden="true" />
               </span>
             </h1>
 
             {/* Tagline */}
-            <p className="hero-subtitle">
-              Real skills for real-world success. LIVE 1-on-1 personalized classes in
-              English Phonics, Public Speaking, Coding, and Conceptual Math designed for
-              confident and joyful learning.
-            </p>
+            <p className="hero-subtitle">{hero.subtitle}</p>
 
             {/* Trustpilot & Reviews */}
             <div className="hero-rating-box">
@@ -137,16 +130,14 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
                   <Star key={i} size={18} fill="#10b981" color="#10b981" />
                 ))}
               </div>
-              <span className="rating-text">
-                Rated <strong>4.8/5</strong> on <span className="rating-trust">Trustpilot</span> & Google
-              </span>
+              <span className="rating-text">{hero.ratingText}</span>
             </div>
 
             {/* Lead Capture Card */}
             <div className="lead-capture-card">
               <div className="lead-capture-title">
                 <MessageCircle size={18} color="#25d366" />
-                <span>Enter your phone number to receive instant curriculum & demo details</span>
+                <span>{hero.leadPrompt}</span>
               </div>
 
               {submitted ? (
@@ -269,13 +260,13 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
 
               <div style={{ marginTop: 12 }}>
                 <h3 style={{ fontSize: "1.25rem", color: "var(--bp-navy-950)", fontWeight: 800 }}>
-                  Bright Path Learning Hub
+                  {hero.sealTitle}
                 </h3>
                 <p style={{ fontSize: "0.85rem", color: "var(--bp-green-600)", fontWeight: 700 }}>
-                  Govt. Registered Business # 9840276
+                  {hero.sealBadge}
                 </p>
                 <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginTop: 6 }}>
-                  Empowering Young Minds with Phonics, Public Speaking, Coding & Math Excellence
+                  {hero.sealDescription}
                 </p>
               </div>
 

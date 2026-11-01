@@ -2,6 +2,7 @@ import React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Phone, Mail, Clock, ShieldCheck, MapPin, MessageCircle } from "lucide-react";
+import { useSiteContent } from "@/context/SiteContentContext";
 
 const FacebookIcon = ({ size = 15, color = "currentColor" }: { size?: number; color?: string }) => (
   <svg
@@ -17,6 +18,9 @@ const FacebookIcon = ({ size = 15, color = "currentColor" }: { size?: number; co
 );
 
 export default function Footer() {
+  const { content } = useSiteContent();
+  const { general } = content;
+
   return (
     <footer className="site-footer">
       <div className="container">
@@ -27,7 +31,7 @@ export default function Footer() {
               <div style={{ position: "relative", width: 48, height: 48 }}>
                 <Image
                   src="/logo.png"
-                  alt="Bright Path Learning Hub Logo"
+                  alt={`${general.siteName} Logo`}
                   width={48}
                   height={48}
                   className="footer-logo-img"
@@ -35,19 +39,15 @@ export default function Footer() {
               </div>
               <div>
                 <div style={{ fontWeight: 800, fontSize: "1.15rem", color: "#ffffff" }}>
-                  Bright Path Learning Hub
+                  {general.siteName}
                 </div>
                 <div style={{ fontSize: "0.74rem", color: "var(--bp-green-400)", fontWeight: 700 }}>
-                  Business Name Reg. No. 9840276
+                  Business Name Reg. No. {general.registrationNo}
                 </div>
               </div>
             </div>
 
-            <p className="footer-desc">
-              Bright Path Learning Hub offers expert-led 1:1 online programs in English Phonics,
-              Public Speaking, Coding, and Conceptual Math for children from LKG to Grade 8.
-              Personalized learning designed for your child’s holistic growth!
-            </p>
+            <p className="footer-desc">{general.footerDescription}</p>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 }}>
               <div
@@ -65,9 +65,8 @@ export default function Footer() {
                 <ShieldCheck size={14} color="#10b981" /> 100% Outcome Guarantee
               </div>
 
-              {/* Facebook Page Pill */}
               <a
-                href="https://web.facebook.com/profile.php?id=61594197483487"
+                href={general.facebookUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
@@ -108,6 +107,12 @@ export default function Footer() {
               <li className="footer-link-item">
                 <a href="#guarantee">100% Outcome Guarantee Policy</a>
               </li>
+              <li className="footer-link-item">
+                <Link href="/portal">Student Learning Portal Login</Link>
+              </li>
+              <li className="footer-link-item">
+                <Link href="/admin">Admin & Counselor Portal</Link>
+              </li>
             </ul>
           </div>
 
@@ -115,21 +120,19 @@ export default function Footer() {
           <div>
             <h4 className="footer-col-title">Contact & Address</h4>
 
-            {/* Address */}
             <div className="footer-contact-item">
               <MapPin size={16} color="var(--bp-gold-400)" style={{ flexShrink: 0 }} />
               <div>
-                <strong>Address:</strong> Kubwa, Abuja
+                <strong>Address:</strong> {general.address}
               </div>
             </div>
 
-            {/* Phone & WhatsApp */}
             <div className="footer-contact-item">
               <Phone size={16} color="var(--bp-gold-400)" style={{ flexShrink: 0 }} />
               <div>
                 <strong>Phone / Call:</strong>{" "}
-                <a href="tel:+2348063202616" className="footer-contact-link">
-                  +234 806 320 2616
+                <a href={`tel:${general.phone}`} className="footer-contact-link">
+                  {general.phone}
                 </a>
               </div>
             </div>
@@ -139,51 +142,48 @@ export default function Footer() {
               <div>
                 <strong>WhatsApp:</strong>{" "}
                 <a
-                  href="https://wa.me/2348063202616?text=Hi%20Bright%20Path%20Learning%20Hub,%20I%20would%20like%20to%20inquire%20about%20your%20classes."
+                  href={`https://wa.me/${general.whatsapp.replace(/[^0-9]/g, "")}?text=Hi%20Bright%20Path%20Learning%20Hub,%20I%20would%20like%20to%20inquire%20about%20your%20classes.`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="footer-contact-link"
                 >
-                  +234 806 320 2616
+                  {general.phone}
                 </a>
               </div>
             </div>
 
-            {/* Email Address */}
             <div className="footer-contact-item">
               <Mail size={16} color="var(--bp-gold-400)" style={{ flexShrink: 0 }} />
               <div>
                 <strong>Email:</strong>{" "}
                 <a
-                  href="mailto:brightpathlearninghub6@gmail.com"
+                  href={`mailto:${general.email}`}
                   className="footer-contact-link"
                   style={{ wordBreak: "break-all" }}
                 >
-                  brightpathlearninghub6@gmail.com
+                  {general.email}
                 </a>
               </div>
             </div>
 
-            {/* Facebook Page Link */}
             <div className="footer-contact-item">
               <FacebookIcon size={16} color="#38bdf8" />
               <div>
                 <strong>Facebook:</strong>{" "}
                 <a
-                  href="https://web.facebook.com/profile.php?id=61594197483487"
+                  href={general.facebookUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="footer-contact-link"
                 >
-                  Bright Path Learning Hub
+                  {general.siteName}
                 </a>
               </div>
             </div>
 
-            {/* Hours */}
             <div className="footer-contact-item">
               <Clock size={16} color="var(--bp-gold-400)" style={{ flexShrink: 0 }} />
-              <div>Mon-Sat: 10 AM - 9 PM | Sun: 10 AM - 7 PM</div>
+              <div>{general.workingHours}</div>
             </div>
           </div>
         </div>
@@ -191,17 +191,18 @@ export default function Footer() {
         {/* Footer Bottom */}
         <div className="footer-bottom">
           <div>
-            © 2026 Bright Path Learning Hub • Kubwa, Abuja • Reg. #9840276. All rights reserved.
+            © 2026 {general.siteName} • {general.address} • Reg. #{general.registrationNo}. All rights reserved.
           </div>
           <div style={{ display: "flex", gap: 16 }}>
             <a
-              href="https://web.facebook.com/profile.php?id=61594197483487"
+              href={general.facebookUrl}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "#38bdf8", display: "inline-flex", alignItems: "center", gap: 4 }}
             >
               <FacebookIcon size={14} /> Facebook
             </a>
+            <Link href="/portal" style={{ color: "#fbbf24" }}>Student Portal</Link>
             <a href="#faq" style={{ color: "#94a3b8" }}>FAQs</a>
             <a href="#courses" style={{ color: "#94a3b8" }}>Courses</a>
             <a href="#guarantee" style={{ color: "#94a3b8" }}>Guarantee</a>

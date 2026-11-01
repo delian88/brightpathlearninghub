@@ -33,7 +33,34 @@ export const contactInquiries = pgTable("contact_inquiries", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const studentAccounts = pgTable("student_accounts", {
+  id: serial("id").primaryKey(),
+  bookingId: integer("booking_id"),
+  parentName: text("parent_name").notNull(),
+  studentName: text("student_name").notNull(),
+  email: text("email").notNull(),
+  phoneNumber: text("phone_number").notNull(),
+  grade: text("grade").notNull(),
+  courseName: text("course_name").notNull(),
+  username: text("username").notNull(),
+  password: text("password").notNull(),
+  classLink: text("class_link"),
+  scheduleSlot: text("schedule_slot"),
+  status: text("status").default("active").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const siteSettings = pgTable("site_settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export type DemoBooking = typeof demoBookings.$inferSelect;
 export type NewDemoBooking = typeof demoBookings.$inferInsert;
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
+export type StudentAccount = typeof studentAccounts.$inferSelect;
+export type NewStudentAccount = typeof studentAccounts.$inferInsert;
+export type SiteSetting = typeof siteSettings.$inferSelect;

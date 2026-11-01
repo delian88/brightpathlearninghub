@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { saveDemoBooking, getDemoBookings } from "@/db";
+import { saveDemoBooking, getDemoBookings, updateDemoBookingStatus } from "@/db";
 import { sendDemoBookingEmails } from "@/lib/email";
 
 export async function GET() {
@@ -75,6 +75,53 @@ export async function POST(request: Request) {
     console.error("POST /api/bookings error:", error);
     return NextResponse.json(
       { success: false, message: "An unexpected error occurred while booking.", error: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, status = "confirmed", notes, sendEmail = true } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: "Booking ID is required." },
+        { status: 400 }
+      );
+    }
+
+    const updated = await updateDemoBookingStatus(Number(id), String(status), notes);
+    if (!updated) {
+      return NextResponse.json(
+        { success: false, message: "Booking not found." },
+        { status: 404 }
+      );
+    }
+
+    let emailResult: any = { sent: false };
+    if (sendEmail && status === "confirmed") {
+      try {
+        emailResult = await sendDemoBookingEmails(updated, true);
+      } catch (emailErr) {
+        console.error("Failed to send booking confirmation emails:", emailErr);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message:
+        status === "confirmed"
+          ? "Booking confirmed and HTML confirmation emails sent to user & admin!"
+          : `Booking status updated to ${status}.`,
+      booking: updated,
+      emailResult,
+    });
+  } catch (error: any) {
+    console.error("PATCH /api/bookings error:", error);
+    return NextResponse.json(
+      { success: false, message: "Failed to update booking.", error: error.message },
       { status: 500 }
     );
   }

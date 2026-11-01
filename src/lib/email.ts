@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import type { DemoBooking, Lead } from "@/db/schema";
+import type { DemoBooking, Lead, StudentAccount } from "@/db/schema";
 
 const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
 const smtpPort = Number(process.env.SMTP_PORT || 465);
@@ -40,26 +40,36 @@ export async function verifySmtpConnection(): Promise<{ success: boolean; error?
   }
 }
 
-export async function sendDemoBookingEmails(booking: DemoBooking) {
+export async function sendDemoBookingEmails(
+  booking: DemoBooking,
+  isAdminConfirmation = false
+) {
   const transporter = getTransporter();
   if (!transporter) return { sent: false, reason: "SMTP not configured" };
 
   const bookingRef = `#BP-${String(booking.id).padStart(5, "0")}`;
   const cleanPhone = booking.phoneNumber.replace(/[^0-9]/g, "");
   const whatsappLink = `https://wa.me/${cleanPhone}`;
+  const badgeTitle = isAdminConfirmation
+    ? `✅ Demo Booking Confirmed (${bookingRef})`
+    : `🎉 New 1:1 Free Demo Booking (${bookingRef})`;
 
-  // 1. Send Admin Notification Email
+  // 1. Admin HTML Email
   const adminHtml = `
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
       <div style="background: #0a1931; color: #ffffff; padding: 24px;">
-        <h2 style="margin: 0; font-size: 20px;">🎉 New 1:1 Free Demo Booking (${bookingRef})</h2>
-        <p style="margin: 6px 0 0; color: #94a3b8; font-size: 14px;">Bright Path Learning Hub — Instant Lead Alert</p>
+        <h2 style="margin: 0; font-size: 20px;">${badgeTitle}</h2>
+        <p style="margin: 6px 0 0; color: #94a3b8; font-size: 14px;">Bright Path Learning Hub — Admin Notification</p>
       </div>
       <div style="padding: 24px; background: #ffffff; color: #1e293b;">
         <table style="width: 100%; border-collapse: collapse; font-size: 15px;">
           <tr>
             <td style="padding: 8px 0; color: #64748b; width: 40%;">Booking Reference:</td>
             <td style="padding: 8px 0; font-weight: 700;">${bookingRef}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #64748b;">Status:</td>
+            <td style="padding: 8px 0; font-weight: 700; color: #059669; text-transform: uppercase;">${booking.status || "confirmed"}</td>
           </tr>
           <tr>
             <td style="padding: 8px 0; color: #64748b;">Parent Name:</td>
@@ -110,12 +120,14 @@ export async function sendDemoBookingEmails(booking: DemoBooking) {
       from: smtpFrom,
       to: adminEmail,
       replyTo: booking.email || undefined,
-      subject: `New Demo Booking ${bookingRef}: ${booking.studentName} (${booking.courseName})`,
+      subject: isAdminConfirmation
+        ? `Confirmed Booking ${bookingRef}: ${booking.studentName} (${booking.courseName})`
+        : `New Demo Booking ${bookingRef}: ${booking.studentName} (${booking.courseName})`,
       html: adminHtml,
     }),
   ];
 
-  // 2. Send Parent Confirmation Email (if parent provided an email address)
+  // 2. Parent Confirmation HTML Email
   if (booking.email && booking.email.includes("@")) {
     const parentHtml = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
@@ -125,19 +137,20 @@ export async function sendDemoBookingEmails(booking: DemoBooking) {
         </div>
         <div style="padding: 24px; background: #ffffff; color: #1e293b; line-height: 1.6;">
           <p>Dear <strong>${booking.parentName}</strong>,</p>
-          <p>Thank you for choosing <strong>Bright Path Learning Hub</strong>! We are thrilled to confirm a complimentary 1-on-1 live trial session for <strong>${booking.studentName}</strong>.</p>
+          <p>Thank you for choosing <strong>Bright Path Learning Hub</strong>! We are pleased to confirm the 1-on-1 live session for <strong>${booking.studentName}</strong>.</p>
           
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 20px 0;">
             <p style="margin: 4px 0;"><strong>Booking Reference:</strong> ${bookingRef}</p>
+            <p style="margin: 4px 0;"><strong>Status:</strong> <span style="color: #059669; font-weight: 700;">CONFIRMED</span></p>
             <p style="margin: 4px 0;"><strong>Student:</strong> ${booking.studentName} (${booking.grade})</p>
             <p style="margin: 4px 0;"><strong>Program:</strong> ${booking.courseName}</p>
-            <p style="margin: 4px 0;"><strong>Preferred Time Slot:</strong> ${booking.preferredTime}</p>
+            <p style="margin: 4px 0;"><strong>Scheduled Slot:</strong> ${booking.preferredTime}</p>
           </div>
 
-          <p>Our academic counselor will contact you shortly on WhatsApp (<strong>${booking.phoneNumber}</strong>) to share the class link and match ${booking.studentName} with a certified mentor.</p>
+          <p>Our academic counselor will connect with you on WhatsApp (<strong>${booking.phoneNumber}</strong>) with the live classroom link and assigned mentor details.</p>
 
           <div style="text-align: center; margin: 26px 0;">
-            <a href="https://wa.me/2348063202616?text=Hi%20Bright%20Path!%20I%20just%20booked%20Demo%20${encodeURIComponent(
+            <a href="https://wa.me/2348063202616?text=Hi%20Bright%20Path!%20I%20received%20confirmation%20for%20Demo%20${encodeURIComponent(
               bookingRef
             )}%20for%20${encodeURIComponent(booking.studentName)}." style="display: inline-block; background: #10b981; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 700;">
               Message Us on WhatsApp (+234 806 320 2616)
@@ -157,7 +170,7 @@ export async function sendDemoBookingEmails(booking: DemoBooking) {
       transporter.sendMail({
         from: smtpFrom,
         to: booking.email,
-        subject: `Demo Class Confirmed (${bookingRef}) — Bright Path Learning Hub`,
+        subject: `Booking Confirmed (${bookingRef}) — Bright Path Learning Hub`,
         html: parentHtml,
       })
     );
@@ -174,6 +187,124 @@ export async function sendDemoBookingEmails(booking: DemoBooking) {
     sent: results.some((r) => r.status === "fulfilled"),
     adminEmailSent: results[0]?.status === "fulfilled",
     userEmailSent: results[1] ? results[1].status === "fulfilled" : false,
+  };
+}
+
+export async function sendStudentWelcomeEmail(
+  account: StudentAccount,
+  portalUrl: string
+) {
+  const transporter = getTransporter();
+  if (!transporter) return { sent: false, reason: "SMTP not configured" };
+
+  const userWelcomeHtml = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 620px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden;">
+      <div style="background: linear-gradient(135deg, #0a1931 0%, #133e87 100%); color: #ffffff; padding: 30px 24px; text-align: center;">
+        <div style="display: inline-block; background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 4px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-bottom: 10px;">
+          WELCOME TO BRIGHT PATH LEARNING HUB
+        </div>
+        <h1 style="margin: 0; font-size: 24px; color: #ffffff;">Enrollment Confirmed & Student Login Credentials</h1>
+        <p style="margin: 8px 0 0; color: #cbd5e1; font-size: 14px;">1-on-1 Personalized Live Learning Portal (KG – Grade 8)</p>
+      </div>
+
+      <div style="padding: 28px 24px; background: #ffffff; color: #1e293b; line-height: 1.6;">
+        <p>Dear <strong>${account.parentName}</strong>,</p>
+        <p>Welcome to the <strong>Bright Path Learning Hub</strong> family! We are delighted to confirm <strong>${account.studentName}</strong>'s enrollment in <strong>${account.courseName}</strong> (${account.grade}).</p>
+        <p>Below are your official <strong>Student Learning Portal Login Credentials</strong>:</p>
+
+        <div style="background: #f8fafc; border: 2px solid #cbd5e1; border-radius: 12px; padding: 20px; margin: 22px 0;">
+          <h3 style="margin: 0 0 12px; color: #0a1931; font-size: 16px;">🔐 Student Portal Access Details</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 15px;">
+            <tr>
+              <td style="padding: 6px 0; color: #64748b; width: 38%;">Student Name:</td>
+              <td style="padding: 6px 0; font-weight: 700;">${account.studentName} (${account.grade})</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Enrolled Course:</td>
+              <td style="padding: 6px 0; font-weight: 700; color: #059669;">${account.courseName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Username / ID:</td>
+              <td style="padding: 6px 0; font-family: monospace; font-size: 16px; font-weight: 700; color: #0f172a;">${account.username}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Password:</td>
+              <td style="padding: 6px 0; font-family: monospace; font-size: 16px; font-weight: 700; color: #dc2626;">${account.password}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Portal Login URL:</td>
+              <td style="padding: 6px 0;"><a href="${portalUrl}" style="color: #1d4ed8; font-weight: 700;">${portalUrl}</a></td>
+            </tr>
+            ${
+              account.scheduleSlot
+                ? `<tr>
+                    <td style="padding: 6px 0; color: #64748b;">Preferred Slot:</td>
+                    <td style="padding: 6px 0; font-weight: 600;">${account.scheduleSlot}</td>
+                  </tr>`
+                : ""
+            }
+          </table>
+        </div>
+
+        <div style="text-align: center; margin: 26px 0;">
+          <a href="${portalUrl}" style="display: inline-block; background: #f59e0b; color: #0a1931; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 800; font-size: 15px;">
+            Log In to Student Portal →
+          </a>
+        </div>
+
+        <p style="font-size: 14px; color: #475569;">If you need any assistance logging in or scheduling your sessions, reply to this email or message our counselor directly on WhatsApp at <strong>+234 806 320 2616</strong>.</p>
+
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+        <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0;">
+          Bright Path Learning Hub • Kubwa, Abuja • Govt. Reg. No. 9840276<br/>
+          Phone/WhatsApp: +234 806 320 2616 • Email: brightpathlearninghub6@gmail.com
+        </p>
+      </div>
+    </div>
+  `;
+
+  const adminCopyHtml = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+      <div style="background: #0a1931; color: #ffffff; padding: 20px 24px;">
+        <h2 style="margin: 0; font-size: 18px;">🔑 Student Login Credentials Generated & Sent</h2>
+        <p style="margin: 4px 0 0; color: #94a3b8; font-size: 13px;">Bright Path Learning Hub — Admin Audit Copy</p>
+      </div>
+      <div style="padding: 24px; background: #ffffff; color: #1e293b;">
+        <p style="margin: 0 0 12px;">Login credentials have been generated and emailed to <strong>${account.parentName}</strong> (${account.email}):</p>
+        <p style="margin: 4px 0;"><strong>Student:</strong> ${account.studentName} (${account.grade})</p>
+        <p style="margin: 4px 0;"><strong>Course:</strong> ${account.courseName}</p>
+        <p style="margin: 4px 0;"><strong>Username:</strong> <code>${account.username}</code></p>
+        <p style="margin: 4px 0;"><strong>Password:</strong> <code>${account.password}</code></p>
+        <p style="margin: 4px 0;"><strong>Portal URL:</strong> <a href="${portalUrl}">${portalUrl}</a></p>
+      </div>
+    </div>
+  `;
+
+  const tasks: Promise<any>[] = [
+    transporter.sendMail({
+      from: smtpFrom,
+      to: adminEmail,
+      subject: `Credentials Generated for ${account.studentName} (${account.username})`,
+      html: adminCopyHtml,
+    }),
+  ];
+
+  if (account.email && account.email.includes("@")) {
+    tasks.unshift(
+      transporter.sendMail({
+        from: smtpFrom,
+        to: account.email,
+        subject: `Welcome to Bright Path Learning Hub! Login Credentials for ${account.studentName}`,
+        html: userWelcomeHtml,
+      })
+    );
+  }
+
+  const results = await Promise.allSettled(tasks);
+  return {
+    sent: results.some((r) => r.status === "fulfilled"),
+    userEmailSent: results[0]?.status === "fulfilled",
+    adminEmailSent: results[results.length - 1]?.status === "fulfilled",
   };
 }
 
@@ -214,4 +345,3 @@ export async function sendNewLeadEmail(lead: Lead) {
 
   return { sent: true };
 }
-

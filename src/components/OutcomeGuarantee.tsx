@@ -1,8 +1,18 @@
 import React from "react";
 import Image from "next/image";
 import { ShieldCheck, UserCheck, Award, TrendingUp, CheckCircle, FileCheck } from "lucide-react";
+import { useSiteContent } from "@/context/SiteContentContext";
 
 export default function OutcomeGuarantee() {
+  const { content } = useSiteContent();
+  const { guaranteeSection, general } = content;
+
+  const promiseIcons = [
+    <UserCheck key="0" size={28} color="#133e87" style={{ margin: "0 auto" }} />,
+    <Award key="1" size={28} color="#f59e0b" style={{ margin: "0 auto" }} />,
+    <TrendingUp key="2" size={28} color="#059669" style={{ margin: "0 auto" }} />,
+  ];
+
   return (
     <section id="guarantee" className="section-padding" style={{ backgroundColor: "#ffffff" }}>
       <div className="container">
@@ -12,45 +22,24 @@ export default function OutcomeGuarantee() {
             <div>
               <div className="guarantee-badge-banner">
                 <ShieldCheck size={18} />
-                <span>Zero Risk • Measurable Results</span>
+                <span>{guaranteeSection.badgeText}</span>
               </div>
 
-              <h2 className="guarantee-title">
-                BRIGHT PATH’S 100% OUTCOME GUARANTEE
-              </h2>
+              <h2 className="guarantee-title">{guaranteeSection.title}</h2>
 
-              <p className="guarantee-desc">
-                At Bright Path Learning Hub, we believe in the transformative power of
-                personalized education. If your child attends at least <strong>90% of their scheduled sessions</strong> and
-                completes guided worksheets, we guarantee tangible, measurable improvement in their
-                reading fluency, public speaking, mathematical problem solving, or coding reasoning.
-              </p>
+              <p className="guarantee-desc">{guaranteeSection.description}</p>
 
               {/* Promises List */}
               <div className="guarantee-promises-list">
-                <div className="promise-box">
-                  <UserCheck size={28} color="#133e87" style={{ margin: "0 auto" }} />
-                  <div className="promise-title">Personalized Learning</div>
-                  <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 4 }}>
-                    Custom progression tailored to your child&#39;s speed
-                  </p>
-                </div>
-
-                <div className="promise-box">
-                  <Award size={28} color="#f59e0b" style={{ margin: "0 auto" }} />
-                  <div className="promise-title">Expert-Led Classes</div>
-                  <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 4 }}>
-                    Top 1% vetted & background-checked educators
-                  </p>
-                </div>
-
-                <div className="promise-box">
-                  <TrendingUp size={28} color="#059669" style={{ margin: "0 auto" }} />
-                  <div className="promise-title">Proven Outcomes</div>
-                  <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 4 }}>
-                    Standardized baseline & post-course assessment
-                  </p>
-                </div>
+                {guaranteeSection.promises.map((p, idx) => (
+                  <div key={idx} className="promise-box">
+                    {promiseIcons[idx % promiseIcons.length]}
+                    <div className="promise-title">{p.title}</div>
+                    <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 4 }}>
+                      {p.subtitle}
+                    </p>
+                  </div>
+                ))}
               </div>
 
               <div
@@ -66,7 +55,7 @@ export default function OutcomeGuarantee() {
               >
                 <CheckCircle size={20} color="#10b981" />
                 <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--bp-navy-950)" }}>
-                  If you don&#39;t observe clear improvement, we provide complimentary extra 1:1 sessions until mastery is achieved.
+                  {guaranteeSection.bottomBannerText}
                 </span>
               </div>
             </div>
@@ -85,10 +74,10 @@ export default function OutcomeGuarantee() {
                 </div>
 
                 <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--bp-navy-950)", marginBottom: 4 }}>
-                  Official Academic Seal
+                  {guaranteeSection.sealTitle}
                 </h3>
                 <p style={{ fontSize: "0.78rem", color: "var(--bp-green-600)", fontWeight: 700 }}>
-                  Business Name Registration No. 9840276
+                  Business Name Registration No. {general.registrationNo}
                 </p>
 
                 <div
@@ -100,7 +89,7 @@ export default function OutcomeGuarantee() {
                   }}
                 >
                   <p style={{ fontStyle: "italic", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                    &ldquo;We are committed to delivering results. We promise success. That is the Bright Path guarantee.&rdquo;
+                    &ldquo;{guaranteeSection.sealQuote}&rdquo;
                   </p>
                   <div
                     style={{
@@ -111,10 +100,10 @@ export default function OutcomeGuarantee() {
                       marginTop: 8,
                     }}
                   >
-                    Academic Directorate
+                    {guaranteeSection.sealDirectorate}
                   </div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                    Bright Path Learning Hub Academic Council
+                    {guaranteeSection.sealCouncil}
                   </div>
                 </div>
 
