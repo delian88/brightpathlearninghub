@@ -411,3 +411,123 @@ export async function sendAdminLoginOtpEmail(
 
   return { sent: true };
 }
+
+export async function sendReportCardEmail(
+  report: {
+    reportRef: string;
+    studentName: string;
+    studentUsername: string;
+    parentName: string;
+    parentEmail: string;
+    grade: string;
+    courseName: string;
+    termPeriod: string;
+    overallScore: number;
+    overallGrade: string;
+    attendanceRate: number;
+    readingProgress: number;
+    homeworkCompletionRate: number;
+    strengths: string[];
+    areasForImprovement: string[];
+    teacherComment: string;
+  },
+  portalUrl: string
+) {
+  const transporter = getTransporter();
+  if (!transporter) return { sent: false, reason: "SMTP not configured" };
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 620px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden;">
+      <div style="background: linear-gradient(135deg, #071527 0%, #133e87 100%); color: #ffffff; padding: 30px 24px; text-align: center;">
+        <div style="display: inline-block; background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 4px 14px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; margin-bottom: 10px;">
+          OFFICIAL ACADEMIC PROGRESS REPORT • ${report.reportRef}
+        </div>
+        <h1 style="margin: 0; font-size: 22px; color: #ffffff;">${report.studentName}'s Academic Report Card</h1>
+        <p style="margin: 6px 0 0; color: #cbd5e1; font-size: 14px;">${report.courseName} (${report.grade}) • ${report.termPeriod}</p>
+      </div>
+
+      <div style="padding: 26px 24px; background: #ffffff; color: #1e293b; line-height: 1.6;">
+        <p>Dear <strong>${report.parentName}</strong>,</p>
+        <p>Your child's latest academic development and performance report card for <strong>${report.studentName}</strong> has been prepared by the Bright Path Learning Hub academic team.</p>
+
+        <div style="background: #f8fafc; border: 2px solid #cbd5e1; border-radius: 12px; padding: 18px; margin: 20px 0;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Overall Assessment Score:</td>
+              <td style="padding: 6px 0; font-weight: 800; color: #059669; font-size: 16px;">${report.overallScore}% (Grade ${report.overallGrade})</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Attendance Rate:</td>
+              <td style="padding: 6px 0; font-weight: 700;">${report.attendanceRate}%</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Homework Completion:</td>
+              <td style="padding: 6px 0; font-weight: 700;">${report.homeworkCompletionRate}%</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Reading & Pronunciation Progress:</td>
+              <td style="padding: 6px 0; font-weight: 700;">${report.readingProgress}%</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="margin: 16px 0;">
+          <div style="font-weight: 800; color: #059669; margin-bottom: 6px;">✅ Key Strengths:</div>
+          <ul style="margin: 0; padding-left: 20px; font-size: 14px;">
+            ${report.strengths.map((s) => `<li>${s}</li>`).join("")}
+          </ul>
+        </div>
+
+        <div style="margin: 16px 0;">
+          <div style="font-weight: 800; color: #d97706; margin-bottom: 6px;">🎯 Areas for Improvement:</div>
+          <ul style="margin: 0; padding-left: 20px; font-size: 14px;">
+            ${report.areasForImprovement.map((s) => `<li>${s}</li>`).join("")}
+          </ul>
+        </div>
+
+        <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 14px 16px; border-radius: 8px; margin: 18px 0; font-size: 14px;">
+          <strong>Teacher's Remark:</strong><br/>
+          ${report.teacherComment}
+        </div>
+
+        <div style="text-align: center; margin: 26px 0;">
+          <a href="${portalUrl}" style="display: inline-block; background: #10b981; color: #ffffff; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 800; font-size: 15px;">
+            View & Download PDF Report Card in Portal →
+          </a>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+        <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0;">
+          Bright Path Learning Hub • Kubwa, Abuja • Govt. Reg. No. 9840276<br/>
+          Phone/WhatsApp: +234 806 320 2616 • Email: brightpathlearninghub6@gmail.com
+        </p>
+      </div>
+    </div>
+  `;
+
+  const tasks: Promise<any>[] = [
+    transporter.sendMail({
+      from: smtpFrom,
+      to: adminEmail,
+      subject: `Report Card Issued (${report.reportRef}) — ${report.studentName}`,
+      html,
+    }),
+  ];
+
+  if (report.parentEmail && report.parentEmail.includes("@")) {
+    tasks.unshift(
+      transporter.sendMail({
+        from: smtpFrom,
+        to: report.parentEmail,
+        subject: `${report.studentName}'s Academic Report Card (${report.reportRef}) — Bright Path Learning Hub`,
+        html,
+      })
+    );
+  }
+
+  const results = await Promise.allSettled(tasks);
+  return {
+    sent: results.some((r) => r.status === "fulfilled"),
+  };
+}
+

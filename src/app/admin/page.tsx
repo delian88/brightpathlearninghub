@@ -40,15 +40,22 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  FileText,
+  TrendingUp,
 } from "lucide-react";
 import { defaultSiteContent, type SiteContentData } from "@/lib/defaultSiteContent";
+import { defaultLmsData, type LmsStateData } from "@/lib/lmsData";
 import ToastNotification, { type ToastData, type ToastType } from "@/components/ToastNotification";
+import AdminLmsManager from "@/components/AdminLmsManager";
 
 type ActiveView =
   | "overview"
   | "bookings"
   | "credentials"
   | "leads"
+  | "lms-homework"
+  | "lms-progress"
+  | "lms-reports"
   | "cms-general"
   | "cms-hero"
   | "cms-benefits"
@@ -88,6 +95,7 @@ export default function AdminDashboardPage() {
   const [leads, setLeads] = useState<any[]>([]);
   const [studentAccounts, setStudentAccounts] = useState<any[]>([]);
   const [siteContent, setSiteContent] = useState<SiteContentData>(defaultSiteContent);
+  const [lmsData, setLmsData] = useState<LmsStateData>(defaultLmsData);
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -169,17 +177,19 @@ export default function AdminDashboardPage() {
   const fetchData = async (notify = false) => {
     setLoading(true);
     try {
-      const [resB, resL, resS, resC] = await Promise.all([
+      const [resB, resL, resS, resC, resLms] = await Promise.all([
         fetch("/api/bookings", { cache: "no-store" }),
         fetch("/api/leads", { cache: "no-store" }),
         fetch("/api/student-accounts", { cache: "no-store" }),
         fetch("/api/site-content", { cache: "no-store" }),
+        fetch("/api/lms", { cache: "no-store" }),
       ]);
-      const [dataB, dataL, dataS, dataC] = await Promise.all([
+      const [dataB, dataL, dataS, dataC, dataLms] = await Promise.all([
         resB.json(),
         resL.json(),
         resS.json(),
         resC.json(),
+        resLms.json(),
       ]);
 
       if (dataB.success) setBookings(dataB.data || []);
@@ -187,6 +197,9 @@ export default function AdminDashboardPage() {
       if (dataS.success) setStudentAccounts(dataS.data || []);
       if (dataC.success && dataC.content) {
         setSiteContent({ ...defaultSiteContent, ...dataC.content });
+      }
+      if (dataLms.success && dataLms.data) {
+        setLmsData(dataLms.data);
       }
       if (notify) {
         showToast("Dashboard records refreshed successfully.", "info");
@@ -554,6 +567,18 @@ export default function AdminDashboardPage() {
     leads: {
       title: "Quick Phone & WhatsApp Leads",
       subtitle: "Instant phone leads captured from the landing page hero banner.",
+    },
+    "lms-homework": {
+      title: "Teacher Hub • Homework Builder & Submissions Grading",
+      subtitle: "Create homework for individual students or entire classes, review auto-graded quizzes, and manually grade written answers.",
+    },
+    "lms-progress": {
+      title: "Teacher Hub • Student Academic Development & AI Practice Logs",
+      subtitle: "Track each child's reading fluency, learning hours, AI Learning Buddy sessions, strengths, and areas needing improvement.",
+    },
+    "lms-reports": {
+      title: "Teacher Hub • Downloadable PDF Report Cards Generator",
+      subtitle: "Generate official PDF report cards, email them to parents, and publish them to the Student & Parent Portal.",
     },
     "cms-general": {
       title: "CMS • General, Header & Footer Settings",
@@ -1044,6 +1069,39 @@ export default function AdminDashboardPage() {
               <PhoneCall size={17} /> Quick Phone Leads
             </span>
             <span className="admin-nav-badge">{leads.length}</span>
+          </button>
+
+          <div className="admin-nav-section-label" style={{ marginTop: 8 }}>
+            Teacher & Learning Hub
+          </div>
+
+          <button
+            onClick={() => switchView("lms-homework")}
+            className={`admin-nav-item ${activeView === "lms-homework" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <FileText size={16} /> Homework & Grading
+            </span>
+            <span className="admin-nav-badge">{lmsData.assignments.length}</span>
+          </button>
+
+          <button
+            onClick={() => switchView("lms-progress")}
+            className={`admin-nav-item ${activeView === "lms-progress" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <TrendingUp size={16} /> Student Progress & AI
+            </span>
+          </button>
+
+          <button
+            onClick={() => switchView("lms-reports")}
+            className={`admin-nav-item ${activeView === "lms-reports" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Award size={16} /> PDF Report Cards
+            </span>
+            <span className="admin-nav-badge">{lmsData.reportCards.length}</span>
           </button>
 
           <div className="admin-nav-section-label" style={{ marginTop: 8 }}>
@@ -2064,6 +2122,21 @@ export default function AdminDashboardPage() {
                 </table>
               </div>
             </div>
+          )}
+
+          {/* =================================================================
+              TEACHER HUB: HOMEWORK, ACADEMIC PROGRESS & PDF REPORT CARDS
+              ================================================================= */}
+          {(activeView === "lms-homework" ||
+            activeView === "lms-progress" ||
+            activeView === "lms-reports") && (
+            <AdminLmsManager
+              activeSection={activeView}
+              lmsData={lmsData}
+              studentAccounts={studentAccounts}
+              onRefresh={() => fetchData(false)}
+              showToast={showToast}
+            />
           )}
 
           {/* =================================================================

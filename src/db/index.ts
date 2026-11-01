@@ -3,6 +3,7 @@ import { eq, or } from "drizzle-orm";
 import postgres from "postgres";
 import * as schema from "./schema";
 import { defaultSiteContent, type SiteContentData } from "@/lib/defaultSiteContent";
+import { defaultLmsData, type LmsStateData } from "@/lib/lmsData";
 
 const connectionString =
   process.env.DATABASE_URL ||
@@ -26,6 +27,7 @@ interface InMemoryStore {
   contacts: any[];
   studentAccounts: schema.StudentAccount[];
   siteContent: SiteContentData;
+  lmsData: LmsStateData;
 }
 
 const memoryStore: InMemoryStore = {
@@ -78,6 +80,7 @@ const memoryStore: InMemoryStore = {
   contacts: [],
   studentAccounts: [],
   siteContent: defaultSiteContent,
+  lmsData: defaultLmsData,
 };
 
 export const db = dbInstance;
@@ -309,3 +312,62 @@ export async function authenticateStudentAccount(
   );
   return memMatch || null;
 }
+
+export async function getLmsData(): Promise<LmsStateData> {
+  if (db) {
+    try {
+      const rows = await db
+        .select()
+        .from(schema.siteSettings)
+        .where(eq(schema.siteSettings.key, "lms_portal_state"));
+      if (rows && rows.length > 0 && rows[0].value) {
+        const parsed = JSON.parse(rows[0].value);
+        return {
+          ...defaultLmsData,
+          ...parsed,
+          assignments: parsed.assignments?.length ? parsed.assignments : defaultLmsData.assignments,
+          submissions: parsed.submissions || [],
+          reportCards: parsed.reportCards || [],
+          notifications: parsed.notifications?.length
+            ? parsed.notifications
+            : defaultLmsData.notifications,
+          progressRecords: parsed.progressRecords || {},
+          aiLogs: parsed.aiLogs || [],
+        };
+      }
+    } catch (err) {
+      console.error("Failed to load lms_portal_state from DB, using defaults:", err);
+    }
+  }
+  return memoryStore.lmsData;
+}
+
+export async function saveLmsData(data: LmsStateData): Promise<LmsStateData> {
+  memoryStore.lmsData = data;
+  if (db) {
+    try {
+      const existing = await db
+        .select()
+        .from(schema.siteSettings)
+        .where(eq(schema.siteSettings.key, "lms_portal_state"));
+
+      const serialized = JSON.stringify(data);
+      if (existing && existing.length > 0) {
+        await db
+          .update(schema.siteSettings)
+          .set({ value: serialized, updatedAt: new Date() })
+          .where(eq(schema.siteSettings.key, "lms_portal_state"));
+      } else {
+        await db.insert(schema.siteSettings).values({
+          key: "lms_portal_state",
+          value: serialized,
+          updatedAt: new Date(),
+        });
+      }
+    } catch (err) {
+      console.error("Failed to save lms_portal_state to DB:", err);
+    }
+  }
+  return data;
+}
+
