@@ -61,8 +61,8 @@ A modern, high-performance web platform for **Bright Path Learning Hub** inspire
 11. **Persistent Floating Sticky Bottom Bar**:
     - Floating action bar for desktop and mobile quick demo booking
 
-12. **Live Database Drawer (Admin / Counselor)**:
-    - Floating database viewer badge (`DB Records`) to inspect bookings and leads saved via Drizzle ORM in real time!
+12. **Counselor & Admin Portal (`/admin`)**:
+    - Dedicated internal management portal at `/admin` to inspect demo bookings, quick phone leads, parent details, and initiate 1-click WhatsApp follow-ups in real time.
 
 ---
 

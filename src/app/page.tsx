@@ -14,7 +14,6 @@ import CurriculumOverview from "@/components/CurriculumOverview";
 import Footer from "@/components/Footer";
 import BookingModal from "@/components/BookingModal";
 import StickyBottomBar from "@/components/StickyBottomBar";
-import AdminLeadsDrawer from "@/components/AdminLeadsDrawer";
 
 export default function Home() {
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
@@ -98,9 +97,6 @@ export default function Home() {
         onClose={handleCloseBooking}
         defaultCourse={selectedCourse}
       />
-
-      {/* DB Real-Time Leads Drawer */}
-      <AdminLeadsDrawer />
     </main>
   );
 }
