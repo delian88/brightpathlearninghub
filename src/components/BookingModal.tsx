@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { X, CheckCircle2, Calendar, Clock, User, Phone, Mail, BookOpen, MessageCircle } from "lucide-react";
+import ToastNotification, { type ToastData, type ToastType } from "@/components/ToastNotification";
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -26,6 +27,15 @@ export default function BookingModal({
   const [submitting, setSubmitting] = useState(false);
   const [successData, setSuccessData] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [toast, setToast] = useState<ToastData | null>(null);
+
+  const showToast = (message: string, type: ToastType = "success") => {
+    const id = Date.now();
+    setToast({ id, message, type });
+    setTimeout(() => {
+      setToast((prev) => (prev?.id === id ? null : prev));
+    }, 5000);
+  };
 
   useEffect(() => {
     if (defaultCourse) {
@@ -65,11 +75,19 @@ export default function BookingModal({
       const data = await res.json();
       if (data.success) {
         setSuccessData(data.booking);
+        showToast(
+          `Demo class booked for ${data.booking.studentName}! Confirmation email sent.`,
+          "success"
+        );
       } else {
-        setErrorMsg(data.message || "Failed to submit booking. Please try again.");
+        const msg = data.message || "Failed to submit booking. Please try again.";
+        setErrorMsg(msg);
+        showToast(msg, "error");
       }
     } catch (err: any) {
-      setErrorMsg("Connection error. Please try again.");
+      const msg = "Connection error. Please try again.";
+      setErrorMsg(msg);
+      showToast(msg, "error");
     } finally {
       setSubmitting(false);
     }
@@ -87,6 +105,7 @@ export default function BookingModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+      <ToastNotification toast={toast} onClose={() => setToast(null)} />
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-header">

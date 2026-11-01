@@ -58,10 +58,10 @@ export default function AdminLeadsDrawer() {
           boxShadow: "0 8px 20px rgba(0,0,0,0.25)",
           cursor: "pointer",
         }}
-        title="View live submissions stored in Drizzle ORM / Database"
+        title="View live booking & inquiry records"
       >
         <Database size={15} color="var(--bp-gold-400)" />
-        <span>DB Records ({bookings.length + leads.length})</span>
+        <span>Live Records ({bookings.length + leads.length})</span>
       </button>
 
       {/* Drawer */}
@@ -101,11 +101,11 @@ export default function AdminLeadsDrawer() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <Database size={18} color="var(--bp-gold-400)" />
                   <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#ffffff" }}>
-                    Database Records (Drizzle ORM)
+                    Live Enrollment & Inquiry Records
                   </h3>
                 </div>
                 <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
-                  Supabase PostgreSQL data store
+                  Bright Path Learning Hub CRM
                 </div>
               </div>
 

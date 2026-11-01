@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { Star, MessageCircle, CheckCircle2, Trophy, ShieldCheck, ArrowRight } from "lucide-react";
 import { useSiteContent } from "@/context/SiteContentContext";
+import ToastNotification, { type ToastData, type ToastType } from "@/components/ToastNotification";
 
 interface HeroSectionProps {
   onOpenBooking: () => void;
@@ -18,6 +19,15 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [toast, setToast] = useState<ToastData | null>(null);
+
+  const showToast = (message: string, type: ToastType = "success") => {
+    const id = Date.now();
+    setToast({ id, message, type });
+    setTimeout(() => {
+      setToast((prev) => (prev?.id === id ? null : prev));
+    }, 5000);
+  };
 
   const rotatingWords = hero.rotatingWords?.length
     ? hero.rotatingWords
@@ -79,15 +89,23 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
       const data = await res.json();
       if (data.success) {
         setSubmitted(true);
+        showToast(
+          "Thank you! Connecting you with our academic counselor on WhatsApp.",
+          "success"
+        );
         const cleanNumber = phone.replace(/[^0-9]/g, "");
         const waDest = general.whatsapp.replace(/[^0-9]/g, "") || "2348063202616";
         const waUrl = `https://wa.me/${waDest}?text=Hello%20Bright%20Path%20Learning%20Hub!%20My%20phone%20is%20${countryCode}${cleanNumber}.%20I%20am%20interested%20in%20online%20classes%20for%20my%20child.`;
         window.open(waUrl, "_blank");
       } else {
-        setErrorMsg(data.message || "Something went wrong.");
+        const msg = data.message || "Something went wrong.";
+        setErrorMsg(msg);
+        showToast(msg, "error");
       }
     } catch (err) {
-      setErrorMsg("Connection error. Please try again.");
+      const msg = "Connection error. Please try again.";
+      setErrorMsg(msg);
+      showToast(msg, "error");
     } finally {
       setSubmitting(false);
     }
@@ -95,6 +113,7 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
 
   return (
     <section className="hero-section">
+      <ToastNotification toast={toast} onClose={() => setToast(null)} />
       <div className="container">
         <div className="hero-grid">
           {/* Left Content Column */}

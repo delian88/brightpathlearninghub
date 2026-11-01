@@ -42,6 +42,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { defaultSiteContent, type SiteContentData } from "@/lib/defaultSiteContent";
+import ToastNotification, { type ToastData, type ToastType } from "@/components/ToastNotification";
 
 type ActiveView =
   | "overview"
@@ -72,6 +73,11 @@ export default function AdminDashboardPage() {
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
+  // 7-Day Trusted Device State
+  const [trustDeviceChecked, setTrustDeviceChecked] = useState(true);
+  const [isDeviceTrusted, setIsDeviceTrusted] = useState(false);
+  const [trustedDaysRemaining, setTrustedDaysRemaining] = useState(0);
+
   // Navigation & Sidebar State
   const [activeView, setActiveView] = useState<ActiveView>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -85,7 +91,7 @@ export default function AdminDashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [toastMsg, setToastMsg] = useState("");
+  const [toast, setToast] = useState<ToastData | null>(null);
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [savingCms, setSavingCms] = useState(false);
 
@@ -108,19 +114,59 @@ export default function AdminDashboardPage() {
   const [generatedResult, setGeneratedResult] = useState<any | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(""), 5000);
+  const showToast = (message: string, type: ToastType = "success") => {
+    const id = Date.now();
+    setToast({ id, message, type });
+    setTimeout(() => {
+      setToast((prev) => (prev?.id === id ? null : prev));
+    }, 5000);
   };
 
   useEffect(() => {
-    const savedAuth = sessionStorage.getItem("bp_admin_auth");
-    if (savedAuth === "true") {
-      setIsAuthenticated(true);
-    }
+    const checkDeviceAndSession = async () => {
+      const localToken = localStorage.getItem("bp_admin_trusted_device_token") || "";
+      const localUntil = Number(localStorage.getItem("bp_admin_trusted_until") || "0");
+
+      // If 7 days have passed, clear stored trusted device token and force a new OTP
+      if (localUntil && Date.now() >= localUntil) {
+        localStorage.removeItem("bp_admin_trusted_device_token");
+        localStorage.removeItem("bp_admin_trusted_until");
+        sessionStorage.removeItem("bp_admin_auth");
+        setIsDeviceTrusted(false);
+        setTrustedDaysRemaining(0);
+        setIsAuthenticated(false);
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/admin/auth", {
+          headers: localToken ? { "x-trusted-device-token": localToken } : {},
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (data.trustedDevice) {
+          setIsDeviceTrusted(true);
+          setTrustedDaysRemaining(data.daysRemaining || 7);
+        } else {
+          localStorage.removeItem("bp_admin_trusted_device_token");
+          localStorage.removeItem("bp_admin_trusted_until");
+          setIsDeviceTrusted(false);
+          setTrustedDaysRemaining(0);
+        }
+      } catch {
+        // Ignore network check error
+      }
+
+      const savedAuth = sessionStorage.getItem("bp_admin_auth");
+      if (savedAuth === "true") {
+        setIsAuthenticated(true);
+      }
+    };
+
+    checkDeviceAndSession();
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (notify = false) => {
     setLoading(true);
     try {
       const [resB, resL, resS, resC] = await Promise.all([
@@ -142,8 +188,14 @@ export default function AdminDashboardPage() {
       if (dataC.success && dataC.content) {
         setSiteContent({ ...defaultSiteContent, ...dataC.content });
       }
+      if (notify) {
+        showToast("Dashboard records refreshed successfully.", "info");
+      }
     } catch (err) {
       console.error("Failed to load admin data:", err);
+      if (notify) {
+        showToast("Unable to refresh records. Please check your connection.", "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -151,7 +203,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchData();
+      fetchData(false);
     }
   }, [isAuthenticated]);
 
@@ -161,6 +213,7 @@ export default function AdminDashboardPage() {
     setAuthError("");
     setOtpSuccessMsg("");
     try {
+      const storedTrustedToken = localStorage.getItem("bp_admin_trusted_device_token") || "";
       const res = await fetch("/api/admin/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -168,6 +221,7 @@ export default function AdminDashboardPage() {
           step: "login",
           email: loginEmail,
           password: loginPassword,
+          trustedDeviceToken: storedTrustedToken,
         }),
       });
       const data = await res.json();
@@ -175,17 +229,30 @@ export default function AdminDashboardPage() {
         setOtpToken(data.otpToken);
         setOtpCode("");
         setAuthStep("otp");
-        setOtpSuccessMsg(
-          data.message || "A 6-digit OTP verification code has been sent to your email."
-        );
+        const msg =
+          data.message || "A 6-digit OTP verification code has been sent to your email.";
+        setOtpSuccessMsg(msg);
+        showToast(msg, "info");
       } else if (data.success && data.verified) {
         sessionStorage.setItem("bp_admin_auth", "true");
+        if (data.trustedDevice) {
+          setIsDeviceTrusted(true);
+          setTrustedDaysRemaining(data.daysRemaining || 7);
+        }
         setIsAuthenticated(true);
+        showToast(
+          data.message || "Signed in via 7-day trusted device verification!",
+          "success"
+        );
       } else {
-        setAuthError(data.message || "Invalid admin credentials.");
+        const errMsg = data.message || "Invalid administrator credentials.";
+        setAuthError(errMsg);
+        showToast(errMsg, "error");
       }
     } catch {
-      setAuthError("Connection error. Please try again.");
+      const errMsg = "Connection error. Please try again.";
+      setAuthError(errMsg);
+      showToast(errMsg, "error");
     } finally {
       setAuthLoading(false);
     }
@@ -204,17 +271,40 @@ export default function AdminDashboardPage() {
           email: loginEmail,
           otpCode,
           otpToken,
+          trustDevice: trustDeviceChecked,
         }),
       });
       const data = await res.json();
       if (data.success && data.verified) {
         sessionStorage.setItem("bp_admin_auth", "true");
+        if (data.trustedDevice && data.trustedDeviceToken && data.trustedUntil) {
+          localStorage.setItem("bp_admin_trusted_device_token", data.trustedDeviceToken);
+          localStorage.setItem("bp_admin_trusted_until", String(data.trustedUntil));
+          setIsDeviceTrusted(true);
+          setTrustedDaysRemaining(7);
+        } else {
+          localStorage.removeItem("bp_admin_trusted_device_token");
+          localStorage.removeItem("bp_admin_trusted_until");
+          setIsDeviceTrusted(false);
+          setTrustedDaysRemaining(0);
+        }
         setIsAuthenticated(true);
+        showToast(
+          data.message ||
+            (trustDeviceChecked
+              ? "OTP verified! This device is now trusted for 7 days."
+              : "OTP verified! Welcome to the Admin Dashboard."),
+          "success"
+        );
       } else {
-        setAuthError(data.message || "Invalid OTP code.");
+        const errMsg = data.message || "Invalid OTP code.";
+        setAuthError(errMsg);
+        showToast(errMsg, "error");
       }
     } catch {
-      setAuthError("Connection error while verifying OTP.");
+      const errMsg = "Connection error while verifying OTP.";
+      setAuthError(errMsg);
+      showToast(errMsg, "error");
     } finally {
       setAuthLoading(false);
     }
@@ -232,20 +322,47 @@ export default function AdminDashboardPage() {
           step: "login",
           email: loginEmail,
           password: loginPassword,
+          forceOtp: true,
         }),
       });
       const data = await res.json();
       if (data.success && data.requireOtp) {
         setOtpToken(data.otpToken);
         setOtpCode("");
-        setOtpSuccessMsg("A new 6-digit OTP code has been sent to your email.");
+        const msg = "A new 6-digit OTP code has been sent to your email.";
+        setOtpSuccessMsg(msg);
+        showToast(msg, "info");
       } else {
-        setAuthError(data.message || "Could not resend OTP.");
+        const errMsg = data.message || "Could not resend OTP.";
+        setAuthError(errMsg);
+        showToast(errMsg, "error");
       }
     } catch {
-      setAuthError("Connection error.");
+      const errMsg = "Connection error while resending OTP.";
+      setAuthError(errMsg);
+      showToast(errMsg, "error");
     } finally {
       setAuthLoading(false);
+    }
+  };
+
+  const handleRevokeTrustedDevice = async () => {
+    try {
+      await fetch("/api/admin/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step: "revoke-trust" }),
+      });
+      localStorage.removeItem("bp_admin_trusted_device_token");
+      localStorage.removeItem("bp_admin_trusted_until");
+      setIsDeviceTrusted(false);
+      setTrustedDaysRemaining(0);
+      showToast(
+        "7-day trusted device removed. A new OTP will be required on next login.",
+        "warning"
+      );
+    } catch {
+      showToast("Failed to update trusted device settings.", "error");
     }
   };
 
@@ -256,6 +373,7 @@ export default function AdminDashboardPage() {
     setLoginPassword("");
     setOtpCode("");
     setOtpToken("");
+    showToast("You have been signed out of the Admin Dashboard.", "info");
   };
 
   const handleConfirmBooking = async (booking: any) => {
@@ -273,16 +391,17 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (data.success) {
         showToast(
-          `✅ Booking #BP-${String(booking.id).padStart(5, "0")} confirmed & HTML emails sent to ${
+          `Booking #BP-${String(booking.id).padStart(5, "0")} confirmed & HTML emails sent to ${
             booking.email || "parent"
-          } and Admin!`
+          } and Admin!`,
+          "success"
         );
-        fetchData();
+        fetchData(false);
       } else {
-        showToast(`⚠️ ${data.message}`);
+        showToast(data.message || "Could not confirm booking.", "error");
       }
     } catch {
-      showToast("⚠️ Failed to confirm booking.");
+      showToast("Failed to confirm booking. Please try again.", "error");
     } finally {
       setConfirmingId(null);
     }
@@ -334,14 +453,15 @@ export default function AdminDashboardPage() {
           portalUrl: data.portalUrl,
         });
         showToast(
-          `🎉 Credentials generated for ${data.account.studentName} & Welcome Email sent to ${data.account.email}!`
+          `Credentials generated for ${data.account.studentName} & Welcome Email sent to ${data.account.email}!`,
+          "success"
         );
-        fetchData();
+        fetchData(false);
       } else {
-        showToast(`⚠️ ${data.message}`);
+        showToast(data.message || "Could not generate student credentials.", "error");
       }
     } catch {
-      showToast("⚠️ Error generating student credentials.");
+      showToast("Error generating student credentials.", "error");
     } finally {
       setGeneratingCred(false);
     }
@@ -357,7 +477,7 @@ export default function AdminDashboardPage() {
     const text = formatCredentialText(acc);
     navigator.clipboard.writeText(text);
     setCopiedId(keyId);
-    showToast("📋 Login credentials copied to clipboard!");
+    showToast("Login credentials copied to clipboard!", "info");
     setTimeout(() => setCopiedId(null), 3000);
   };
 
@@ -371,12 +491,12 @@ export default function AdminDashboardPage() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast("✅ Landing page & site content saved to Supabase!");
+        showToast("Landing page & website content published successfully!", "success");
       } else {
-        showToast(`⚠️ ${data.message || "Failed to save changes"}`);
+        showToast(data.message || "Failed to save changes.", "error");
       }
     } catch {
-      showToast("⚠️ Error saving site content.");
+      showToast("Error saving website content.", "error");
     } finally {
       setSavingCms(false);
     }
@@ -493,6 +613,8 @@ export default function AdminDashboardPage() {
           fontFamily: "var(--font-sans)",
         }}
       >
+        <ToastNotification toast={toast} onClose={() => setToast(null)} />
+
         <div
           style={{
             width: "100%",
@@ -504,7 +626,7 @@ export default function AdminDashboardPage() {
             border: "1px solid rgba(255,255,255,0.15)",
           }}
         >
-          <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
             <div
               style={{
                 width: 82,
@@ -545,9 +667,49 @@ export default function AdminDashboardPage() {
             <p style={{ fontSize: "0.86rem", color: "#64748b", marginTop: 6 }}>
               {authStep === "otp"
                 ? `We sent a 6-digit confirmation code to ${loginEmail}`
+                : isDeviceTrusted
+                ? `Trusted device active (${trustedDaysRemaining} day(s) remaining before next OTP).`
                 : "Sign in with your administrator credentials to receive your 6-digit login OTP."}
             </p>
           </div>
+
+          {isDeviceTrusted && authStep === "credentials" && (
+            <div
+              style={{
+                background: "#ecfdf5",
+                color: "#065f46",
+                padding: "10px 14px",
+                borderRadius: 12,
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                marginBottom: 16,
+                border: "1px solid #a7f3d0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <ShieldCheck size={16} /> 7-Day Trusted Device ({trustedDaysRemaining}d left)
+              </span>
+              <button
+                type="button"
+                onClick={handleRevokeTrustedDevice}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#047857",
+                  textDecoration: "underline",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Require OTP
+              </button>
+            </div>
+          )}
 
           {otpSuccessMsg && authStep === "otp" && (
             <div
@@ -636,7 +798,15 @@ export default function AdminDashboardPage() {
                 style={{ width: "100%", padding: "14px", fontSize: "0.96rem", marginTop: 10 }}
               >
                 <Lock size={17} />
-                <span>{authLoading ? "Sending OTP Email..." : "Continue & Send OTP Email"}</span>
+                <span>
+                  {authLoading
+                    ? isDeviceTrusted
+                      ? "Signing In..."
+                      : "Sending OTP Email..."
+                    : isDeviceTrusted
+                    ? "Sign In (Trusted Device)"
+                    : "Continue & Send OTP Email"}
+                </span>
               </button>
             </form>
           ) : (
@@ -666,11 +836,36 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  background: "#f8fafc",
+                  borderRadius: 10,
+                  border: "1px solid #e2e8f0",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  color: "#334155",
+                  cursor: "pointer",
+                  marginBottom: 14,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={trustDeviceChecked}
+                  onChange={(e) => setTrustDeviceChecked(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: "#10b981", cursor: "pointer" }}
+                />
+                <span>Trust this device for 7 days (request new OTP after 7 days)</span>
+              </label>
+
               <button
                 type="submit"
                 disabled={authLoading || otpCode.length !== 6}
                 className="btn btn-primary shining"
-                style={{ width: "100%", padding: "14px", fontSize: "0.96rem", marginTop: 8 }}
+                style={{ width: "100%", padding: "14px", fontSize: "0.96rem", marginTop: 4 }}
               >
                 <ShieldCheck size={18} />
                 <span>{authLoading ? "Verifying OTP..." : "Verify OTP & Enter Dashboard"}</span>
@@ -754,27 +949,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="admin-shell">
       {/* Toast Notification */}
-      {toastMsg && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 24,
-            right: 24,
-            background: "#071527",
-            color: "#ffffff",
-            padding: "14px 20px",
-            borderRadius: 12,
-            boxShadow: "0 15px 35px rgba(0,0,0,0.3)",
-            borderLeft: "4px solid #10b981",
-            zIndex: 9999,
-            fontSize: "0.88rem",
-            fontWeight: 700,
-            maxWidth: 420,
-          }}
-        >
-          {toastMsg}
-        </div>
-      )}
+      <ToastNotification toast={toast} onClose={() => setToast(null)} />
 
       {/* Mobile Sidebar Backdrop */}
       <div
@@ -950,6 +1125,40 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
 
+          {isDeviceTrusted && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "rgba(16, 185, 129, 0.14)",
+                color: "#34d399",
+                padding: "6px 10px",
+                borderRadius: 8,
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                marginBottom: 10,
+              }}
+            >
+              <span>🛡️ Trusted Device ({trustedDaysRemaining}d)</span>
+              <button
+                type="button"
+                onClick={handleRevokeTrustedDevice}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#fcd34d",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+              >
+                Reset
+              </button>
+            </div>
+          )}
+
           <div
             style={{
               display: "flex",
@@ -1078,7 +1287,7 @@ export default function AdminDashboardPage() {
             )}
 
             <button
-              onClick={fetchData}
+              onClick={() => fetchData(true)}
               disabled={loading}
               style={{
                 display: "inline-flex",

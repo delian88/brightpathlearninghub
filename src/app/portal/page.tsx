@@ -17,6 +17,7 @@ import {
   Award,
   Video,
 } from "lucide-react";
+import ToastNotification, { type ToastData, type ToastType } from "@/components/ToastNotification";
 
 export default function StudentPortalPage() {
   const [username, setUsername] = useState("");
@@ -24,6 +25,15 @@ export default function StudentPortalPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [studentAccount, setStudentAccount] = useState<any | null>(null);
+  const [toast, setToast] = useState<ToastData | null>(null);
+
+  const showToast = (message: string, type: ToastType = "success") => {
+    const id = Date.now();
+    setToast({ id, message, type });
+    setTimeout(() => {
+      setToast((prev) => (prev?.id === id ? null : prev));
+    }, 5000);
+  };
 
   useEffect(() => {
     const saved = sessionStorage.getItem("bp_student_account");
@@ -48,11 +58,16 @@ export default function StudentPortalPage() {
       if (data.success && data.account) {
         setStudentAccount(data.account);
         sessionStorage.setItem("bp_student_account", JSON.stringify(data.account));
+        showToast(`Welcome back, ${data.account.studentName}!`, "success");
       } else {
-        setError(data.message || "Invalid username or password.");
+        const errMsg = data.message || "Invalid username or password.";
+        setError(errMsg);
+        showToast(errMsg, "error");
       }
     } catch {
-      setError("Connection error. Please try again.");
+      const errMsg = "Connection error. Please try again.";
+      setError(errMsg);
+      showToast(errMsg, "error");
     } finally {
       setLoading(false);
     }
@@ -63,10 +78,12 @@ export default function StudentPortalPage() {
     setStudentAccount(null);
     setUsername("");
     setPassword("");
+    showToast("You have been signed out of the Student Portal.", "info");
   };
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "var(--font-sans)" }}>
+      <ToastNotification toast={toast} onClose={() => setToast(null)} />
       {/* Top Bar */}
       <header
         style={{
