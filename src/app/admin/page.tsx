@@ -4,11 +4,22 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
-  Database,
+  LayoutDashboard,
+  Calendar,
+  Key,
+  PhoneCall,
+  Globe,
+  Sparkles,
+  Award,
+  BookOpen,
+  MessageSquareQuote,
+  Star,
+  ShieldCheck,
+  HelpCircle,
+  Table,
   RefreshCw,
   Phone,
   User,
-  BookOpen,
   Clock,
   ArrowLeft,
   Mail,
@@ -16,25 +27,51 @@ import {
   Search,
   ExternalLink,
   Lock,
-  Key,
   Copy,
   Check,
   Send,
-  Edit3,
   Save,
   Plus,
   Trash2,
   LogOut,
+  Menu,
+  X,
+  Users,
+  CheckCircle2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { defaultSiteContent, type SiteContentData } from "@/lib/defaultSiteContent";
+
+type ActiveView =
+  | "overview"
+  | "bookings"
+  | "credentials"
+  | "leads"
+  | "cms-general"
+  | "cms-hero"
+  | "cms-benefits"
+  | "cms-courses"
+  | "cms-why"
+  | "cms-testimonials"
+  | "cms-stars"
+  | "cms-guarantee"
+  | "cms-faq"
+  | "cms-curriculum";
 
 export default function AdminDashboardPage() {
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginEmail, setLoginEmail] = useState("brightpathlearninghub6@gmail.com");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+
+  // Navigation & Sidebar State
+  const [activeView, setActiveView] = useState<ActiveView>("overview");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [bookingFilter, setBookingFilter] = useState<"all" | "confirmed" | "pending">("all");
 
   // Dashboard Data State
   const [bookings, setBookings] = useState<any[]>([]);
@@ -42,27 +79,13 @@ export default function AdminDashboardPage() {
   const [studentAccounts, setStudentAccounts] = useState<any[]>([]);
   const [siteContent, setSiteContent] = useState<SiteContentData>(defaultSiteContent);
 
-  const [activeTab, setActiveTab] = useState<"bookings" | "credentials" | "cms" | "leads">("bookings");
-  const [cmsSection, setCmsSection] = useState<
-    | "general"
-    | "hero"
-    | "benefits"
-    | "courses"
-    | "why"
-    | "testimonials"
-    | "stars"
-    | "guarantee"
-    | "faq"
-    | "curriculum"
-  >("general");
-
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [toastMsg, setToastMsg] = useState("");
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [savingCms, setSavingCms] = useState(false);
 
-  // Credential Generation Modal / Form State
+  // Credential Generation Modal State
   const [credModalOpen, setCredModalOpen] = useState(false);
   const [credForm, setCredForm] = useState({
     bookingId: null as number | null,
@@ -248,7 +271,8 @@ export default function AdminDashboardPage() {
   };
 
   const formatCredentialText = (acc: any) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://brightpathlearninghub.com";
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "https://brightpathlearninghub.vercel.app";
     return `🌟 *Bright Path Learning Hub — Student Login Credentials*\n\n👨‍🎓 *Student:* ${acc.studentName} (${acc.grade})\n📚 *Course:* ${acc.courseName}\n🔐 *Username:* ${acc.username}\n🔑 *Password:* ${acc.password}\n🌐 *Student Portal:* ${origin}/portal\n\nWelcome aboard! You can log in anytime using the credentials above.`;
   };
 
@@ -270,7 +294,7 @@ export default function AdminDashboardPage() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast("✅ Landing page & site content saved to database!");
+        showToast("✅ Landing page & site content saved to Supabase!");
       } else {
         showToast(`⚠️ ${data.message || "Failed to save changes"}`);
       }
@@ -282,7 +306,9 @@ export default function AdminDashboardPage() {
   };
 
   const filteredBookings = bookings.filter((b) => {
+    if (bookingFilter !== "all" && (b.status || "confirmed") !== bookingFilter) return false;
     const q = searchQuery.toLowerCase();
+    if (!q) return true;
     return (
       b.parentName?.toLowerCase().includes(q) ||
       b.studentName?.toLowerCase().includes(q) ||
@@ -295,18 +321,94 @@ export default function AdminDashboardPage() {
 
   const filteredLeads = leads.filter((l) => {
     const q = searchQuery.toLowerCase();
+    if (!q) return true;
     return l.phoneNumber?.toLowerCase().includes(q) || l.source?.toLowerCase().includes(q);
+  });
+
+  const filteredCredentials = studentAccounts.filter((acc) => {
+    const q = searchQuery.toLowerCase();
+    if (!q) return true;
+    return (
+      acc.studentName?.toLowerCase().includes(q) ||
+      acc.parentName?.toLowerCase().includes(q) ||
+      acc.username?.toLowerCase().includes(q) ||
+      acc.email?.toLowerCase().includes(q) ||
+      acc.courseName?.toLowerCase().includes(q)
+    );
   });
 
   const cleanPhoneForWhatsApp = (phone: string) => (phone || "").replace(/[^0-9]/g, "");
 
-  // Admin Login Gate
+  const isCmsView = activeView.startsWith("cms-");
+
+  const viewTitles: Record<ActiveView, { title: string; subtitle: string }> = {
+    overview: {
+      title: "Executive Dashboard Overview",
+      subtitle: "Real-time summary of demo bookings, student credentials, leads, and website CMS.",
+    },
+    bookings: {
+      title: "1:1 Demo Class Bookings",
+      subtitle: "Review bookings, confirm sessions, send HTML confirmation emails, and generate student accounts.",
+    },
+    credentials: {
+      title: "Student Login Credentials Manager",
+      subtitle: "Generate student portal accounts, copy credentials for WhatsApp, and send Welcome HTML emails.",
+    },
+    leads: {
+      title: "Quick Phone & WhatsApp Leads",
+      subtitle: "Instant phone leads captured from the landing page hero banner.",
+    },
+    "cms-general": {
+      title: "CMS • General, Header & Footer Settings",
+      subtitle: "Update brand name, registration number, phone, WhatsApp, email, address, and footer content.",
+    },
+    "cms-hero": {
+      title: "CMS • Hero Banner Section",
+      subtitle: "Customize headlines, animated rotating skill words, rating text, and official seal.",
+    },
+    "cms-benefits": {
+      title: "CMS • Key Benefits Strip",
+      subtitle: "Edit the 4 core differentiators displayed below the hero fold.",
+    },
+    "cms-courses": {
+      title: "CMS • Flagship 1-on-1 Courses",
+      subtitle: "Update course titles, grade ranges, taglines, hours, worksheets, and feature bullets.",
+    },
+    "cms-why": {
+      title: "CMS • Why Bright Path Section",
+      subtitle: "Edit the pedagogical pillars and educator highlights.",
+    },
+    "cms-testimonials": {
+      title: "CMS • Parent Stories & Video Review",
+      subtitle: "Manage parent quotes, ratings, and the featured YouTube video story.",
+    },
+    "cms-stars": {
+      title: "CMS • Shining Stars Achievers",
+      subtitle: "Update student Olympiad winners, speech distinctions, and coding champions.",
+    },
+    "cms-guarantee": {
+      title: "CMS • 100% Outcome Guarantee",
+      subtitle: "Customize guarantee terms, promises, and academic seal text.",
+    },
+    "cms-faq": {
+      title: "CMS • Frequently Asked Questions",
+      subtitle: "Add, edit, or remove FAQ items displayed on the landing page.",
+    },
+    "cms-curriculum": {
+      title: "CMS • Curriculum Overview Table",
+      subtitle: "Edit the SEO program comparison matrix at the bottom of the landing page.",
+    },
+  };
+
+  // ============================================================================
+  // LOGIN SCREEN (UNAUTHENTICATED)
+  // ============================================================================
   if (!isAuthenticated) {
     return (
       <div
         style={{
           minHeight: "100vh",
-          background: "linear-gradient(135deg, #071527 0%, #0b2545 100%)",
+          background: "radial-gradient(circle at 20% 20%, #133e87 0%, #071527 70%)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -317,26 +419,54 @@ export default function AdminDashboardPage() {
         <div
           style={{
             width: "100%",
-            maxWidth: 430,
+            maxWidth: 440,
             background: "#ffffff",
-            borderRadius: 16,
-            padding: "36px 30px",
-            boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+            borderRadius: 24,
+            padding: "40px 34px",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.45)",
+            border: "1px solid rgba(255,255,255,0.15)",
           }}
         >
-          <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <Image
-              src="/logo.png"
-              alt="Bright Path Learning Hub"
-              width={76}
-              height={76}
-              style={{ margin: "0 auto 12px", borderRadius: "50%" }}
-            />
-            <h1 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--bp-navy-950)", margin: 0 }}>
-              Admin & Counselor Login
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <div
+              style={{
+                width: 82,
+                height: 82,
+                margin: "0 auto 14px",
+                borderRadius: "50%",
+                padding: 4,
+                background: "linear-gradient(135deg, #f59e0b, #10b981)",
+                boxShadow: "0 8px 20px rgba(245, 158, 11, 0.25)",
+              }}
+            >
+              <Image
+                src="/logo.png"
+                alt="Bright Path Learning Hub"
+                width={74}
+                height={74}
+                style={{ borderRadius: "50%", background: "#fff", width: "100%", height: "100%", objectFit: "contain" }}
+              />
+            </div>
+            <span
+              style={{
+                display: "inline-block",
+                background: "#eff6ff",
+                color: "#1d4ed8",
+                fontSize: "0.72rem",
+                fontWeight: 800,
+                padding: "4px 12px",
+                borderRadius: 999,
+                letterSpacing: "0.05em",
+                marginBottom: 8,
+              }}
+            >
+              ADMINISTRATION PORTAL
+            </span>
+            <h1 style={{ fontSize: "1.45rem", fontWeight: 800, color: "#071527", margin: 0 }}>
+              Bright Path Control Center
             </h1>
-            <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 6 }}>
-              Bright Path Learning Hub • CMS & Booking Control
+            <p style={{ fontSize: "0.86rem", color: "#64748b", marginTop: 6 }}>
+              Sign in with your administrator credentials to manage bookings, student logins, and website content.
             </p>
           </div>
 
@@ -345,10 +475,11 @@ export default function AdminDashboardPage() {
               style={{
                 background: "#fef2f2",
                 color: "#dc2626",
-                padding: "10px 14px",
-                borderRadius: 8,
+                padding: "12px 14px",
+                borderRadius: 12,
                 fontSize: "0.84rem",
-                marginBottom: 16,
+                fontWeight: 600,
+                marginBottom: 18,
                 border: "1px solid #fecaca",
               }}
             >
@@ -358,42 +489,76 @@ export default function AdminDashboardPage() {
 
           <form onSubmit={handleAdminLogin}>
             <div className="form-group">
-              <label className="form-label">Admin Email</label>
+              <label className="form-label">Administrator Email</label>
               <input
                 type="email"
                 className="form-input"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="brightpathlearninghub6@gmail.com"
                 required
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label">Admin Password</label>
-              <input
-                type="password"
-                className="form-input"
-                placeholder="Enter admin password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                required
-              />
+              <label className="form-label">Password</label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showPass ? "text" : "password"}
+                  className="form-input"
+                  style={{ paddingRight: 42 }}
+                  placeholder="Enter admin password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  style={{
+                    position: "absolute",
+                    right: 12,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "#64748b",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                  aria-label="Toggle password visibility"
+                >
+                  {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button
               type="submit"
               disabled={authLoading}
               className="btn btn-primary shining"
-              style={{ width: "100%", padding: "13px", fontSize: "0.95rem", marginTop: 8 }}
+              style={{ width: "100%", padding: "14px", fontSize: "0.96rem", marginTop: 10 }}
             >
               <Lock size={17} />
-              <span>{authLoading ? "Verifying..." : "Sign In to Admin Panel"}</span>
+              <span>{authLoading ? "Signing In..." : "Sign In to Dashboard"}</span>
             </button>
           </form>
 
-          <div style={{ textAlign: "center", marginTop: 18 }}>
-            <Link href="/" style={{ fontSize: "0.83rem", color: "#64748b", textDecoration: "none" }}>
-              ← Return to Public Website
+          <div
+            style={{
+              marginTop: 22,
+              paddingTop: 16,
+              borderTop: "1px solid #f1f5f9",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: "0.82rem",
+            }}
+          >
+            <Link href="/" style={{ color: "#475569", fontWeight: 600, textDecoration: "none" }}>
+              ← Public Website
+            </Link>
+            <Link href="/portal" style={{ color: "#1d4ed8", fontWeight: 700, textDecoration: "none" }}>
+              Student Portal →
             </Link>
           </div>
         </div>
@@ -401,8 +566,16 @@ export default function AdminDashboardPage() {
     );
   }
 
+  const switchView = (view: ActiveView) => {
+    setActiveView(view);
+    setSidebarOpen(false);
+  };
+
+  // ============================================================================
+  // AUTHENTICATED MODERN DASHBOARD SHELL
+  // ============================================================================
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc", color: "var(--bp-navy-950)", fontFamily: "var(--font-sans)" }}>
+    <div className="admin-shell">
       {/* Toast Notification */}
       {toastMsg && (
         <div
@@ -410,14 +583,14 @@ export default function AdminDashboardPage() {
             position: "fixed",
             bottom: 24,
             right: 24,
-            background: "#0a1931",
+            background: "#071527",
             color: "#ffffff",
             padding: "14px 20px",
-            borderRadius: 10,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+            borderRadius: 12,
+            boxShadow: "0 15px 35px rgba(0,0,0,0.3)",
             borderLeft: "4px solid #10b981",
             zIndex: 9999,
-            fontSize: "0.9rem",
+            fontSize: "0.88rem",
             fontWeight: 700,
             maxWidth: 420,
           }}
@@ -426,740 +599,1095 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* Top Header */}
-      <header
-        style={{
-          background: "var(--bp-navy-950)",
-          color: "#ffffff",
-          padding: "16px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          borderBottom: "2px solid var(--bp-gold-400)",
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <Link
-            href="/"
+      {/* Mobile Sidebar Backdrop */}
+      <div
+        className={`admin-sidebar-backdrop ${sidebarOpen ? "open" : ""}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      {/* LEFT SIDEBAR NAVIGATION */}
+      <aside className={`admin-sidebar ${sidebarOpen ? "open" : ""}`}>
+        {/* Brand Header */}
+        <div
+          style={{
+            padding: "20px 18px",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Image
+              src="/logo.png"
+              alt="Bright Path Logo"
+              width={42}
+              height={42}
+              style={{
+                borderRadius: "50%",
+                background: "#ffffff",
+                padding: 2,
+                border: "2px solid #fbbf24",
+                flexShrink: 0,
+              }}
+            />
+            <div>
+              <div style={{ fontWeight: 800, fontSize: "1rem", color: "#ffffff", lineHeight: 1.2 }}>
+                Bright Path Hub
+              </div>
+              <div style={{ fontSize: "0.7rem", color: "#34d399", fontWeight: 700, marginTop: 2 }}>
+                ADMIN & CMS PORTAL
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="admin-mobile-menu-btn"
+            style={{ background: "rgba(255,255,255,0.08)", color: "#fff", border: "none" }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Navigation Groups */}
+        <div style={{ flex: 1, paddingBottom: 16 }}>
+          <div className="admin-nav-section-label">CRM & Operations</div>
+
+          <button
+            onClick={() => switchView("overview")}
+            className={`admin-nav-item ${activeView === "overview" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <LayoutDashboard size={17} /> Dashboard Overview
+            </span>
+          </button>
+
+          <button
+            onClick={() => switchView("bookings")}
+            className={`admin-nav-item ${activeView === "bookings" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Calendar size={17} /> Demo Bookings
+            </span>
+            <span className="admin-nav-badge">{bookings.length}</span>
+          </button>
+
+          <button
+            onClick={() => switchView("credentials")}
+            className={`admin-nav-item ${activeView === "credentials" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Key size={17} /> Student Credentials
+            </span>
+            <span className="admin-nav-badge">{studentAccounts.length}</span>
+          </button>
+
+          <button
+            onClick={() => switchView("leads")}
+            className={`admin-nav-item ${activeView === "leads" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <PhoneCall size={17} /> Quick Phone Leads
+            </span>
+            <span className="admin-nav-badge">{leads.length}</span>
+          </button>
+
+          <div className="admin-nav-section-label" style={{ marginTop: 8 }}>
+            Landing Page CMS Editor
+          </div>
+
+          {[
+            { id: "cms-general", label: "General & Footer", icon: <Globe size={16} /> },
+            { id: "cms-hero", label: "Hero Banner", icon: <Sparkles size={16} /> },
+            { id: "cms-benefits", label: "4 Key Benefits", icon: <Award size={16} /> },
+            { id: "cms-courses", label: "Flagship Courses", icon: <BookOpen size={16} /> },
+            { id: "cms-why", label: "Why Bright Path", icon: <CheckCircle2 size={16} /> },
+            { id: "cms-testimonials", label: "Parent Stories", icon: <MessageSquareQuote size={16} /> },
+            { id: "cms-stars", label: "Shining Stars", icon: <Star size={16} /> },
+            { id: "cms-guarantee", label: "100% Guarantee", icon: <ShieldCheck size={16} /> },
+            { id: "cms-faq", label: "FAQs Manager", icon: <HelpCircle size={16} /> },
+            { id: "cms-curriculum", label: "Curriculum Table", icon: <Table size={16} /> },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => switchView(item.id as ActiveView)}
+              className={`admin-nav-item ${activeView === item.id ? "active" : ""}`}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {item.icon} {item.label}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Sidebar Footer / Quick Links & Admin Info */}
+        <div
+          style={{
+            padding: "16px",
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(0,0,0,0.2)",
+          }}
+        >
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <Link
+              href="/"
+              target="_blank"
+              style={{
+                flex: 1,
+                padding: "8px 10px",
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.08)",
+                color: "#e2e8f0",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                textAlign: "center",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 5,
+              }}
+            >
+              <ExternalLink size={13} /> Live Site
+            </Link>
+            <Link
+              href="/portal"
+              target="_blank"
+              style={{
+                flex: 1,
+                padding: "8px 10px",
+                borderRadius: 8,
+                background: "rgba(56, 189, 248, 0.14)",
+                color: "#38bdf8",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                textAlign: "center",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 5,
+              }}
+            >
+              <Users size={13} /> Portal
+            </Link>
+          </div>
+
+          <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 6,
-              color: "var(--bp-gold-400)",
-              fontSize: "0.85rem",
-              fontWeight: 700,
-              textDecoration: "none",
-              padding: "6px 12px",
-              borderRadius: "8px",
-              background: "rgba(255,255,255,0.06)",
+              justifyContent: "space-between",
+              gap: 8,
             }}
           >
-            <ArrowLeft size={16} />
-            <span>Public Site</span>
-          </Link>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#ffffff" }}>Administrator</div>
+              <div
+                style={{
+                  fontSize: "0.7rem",
+                  color: "#94a3b8",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                brightpathlearninghub6@gmail.com
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              style={{
+                padding: "8px",
+                borderRadius: 8,
+                background: "rgba(239, 68, 68, 0.18)",
+                color: "#fca5a5",
+                border: "none",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        </div>
+      </aside>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Image
-              src="/logo.png"
-              alt="Bright Path Learning Hub"
-              width={36}
-              height={36}
-              style={{ borderRadius: "50%", border: "1.5px solid var(--bp-gold-400)" }}
-            />
+      {/* MAIN CONTENT AREA */}
+      <div className="admin-main-wrapper">
+        {/* TOP STICKY BAR */}
+        <header className="admin-topbar">
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="admin-mobile-menu-btn"
+              aria-label="Open navigation sidebar"
+            >
+              <Menu size={20} />
+            </button>
             <div>
-              <h1 style={{ fontSize: "1.1rem", fontWeight: 800, margin: 0, color: "#ffffff" }}>
-                Bright Path Learning Hub — Admin & CMS Control Center
+              <h1 style={{ fontSize: "1.18rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                {viewTitles[activeView].title}
               </h1>
-              <p style={{ fontSize: "0.75rem", margin: 0, color: "#94a3b8" }}>
-                Bookings • Student Credentials • Landing Page CMS • BN 9840276
+              <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "2px 0 0" }}>
+                {viewTitles[activeView].subtitle}
               </p>
             </div>
           </div>
-        </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button
-            onClick={() => openCredentialGenerator()}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "#10b981",
-              color: "#ffffff",
-              border: "none",
-              padding: "8px 14px",
-              borderRadius: "8px",
-              fontWeight: 700,
-              fontSize: "0.83rem",
-              cursor: "pointer",
-            }}
-          >
-            <Key size={14} />
-            <span>New Student Login</span>
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {!isCmsView && (
+              <div style={{ position: "relative", minWidth: 230 }}>
+                <Search
+                  size={15}
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "#94a3b8",
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="Search records..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px 8px 34px",
+                    borderRadius: 10,
+                    border: "1px solid #cbd5e1",
+                    background: "#f8fafc",
+                    fontSize: "0.83rem",
+                    outline: "none",
+                  }}
+                />
+              </div>
+            )}
 
-          <button
-            onClick={fetchData}
-            disabled={loading}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "var(--bp-gold-400)",
-              color: "var(--bp-navy-950)",
-              border: "none",
-              padding: "8px 14px",
-              borderRadius: "8px",
-              fontWeight: 700,
-              fontSize: "0.83rem",
-              cursor: "pointer",
-            }}
-          >
-            <RefreshCw size={14} />
-            <span>{loading ? "Syncing..." : "Refresh"}</span>
-          </button>
-
-          <button
-            onClick={handleLogout}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "rgba(239,68,68,0.2)",
-              color: "#fca5a5",
-              border: "1px solid rgba(239,68,68,0.4)",
-              padding: "8px 12px",
-              borderRadius: "8px",
-              fontWeight: 700,
-              fontSize: "0.82rem",
-              cursor: "pointer",
-            }}
-          >
-            <LogOut size={14} />
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main style={{ maxWidth: "1240px", margin: "0 auto", padding: "24px 20px" }}>
-        {/* Metric Cards Strip */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 16,
-            marginBottom: 24,
-          }}
-        >
-          <div style={{ background: "#ffffff", borderRadius: 12, padding: 20, border: "1px solid #e2e8f0" }}>
-            <div style={{ fontSize: "0.82rem", color: "#64748b", fontWeight: 600 }}>Demo Bookings</div>
-            <div style={{ fontSize: "1.9rem", fontWeight: 800, color: "var(--bp-navy-950)", marginTop: 4 }}>
-              {bookings.length}
-            </div>
-            <div style={{ fontSize: "0.75rem", color: "#10b981", marginTop: 4 }}>
-              Confirm & send HTML emails
-            </div>
-          </div>
-
-          <div style={{ background: "#ffffff", borderRadius: 12, padding: 20, border: "1px solid #e2e8f0" }}>
-            <div style={{ fontSize: "0.82rem", color: "#64748b", fontWeight: 600 }}>Student Login Accounts</div>
-            <div style={{ fontSize: "1.9rem", fontWeight: 800, color: "#059669", marginTop: 4 }}>
-              {studentAccounts.length}
-            </div>
-            <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: 4 }}>
-              Generated credentials & welcome emails
-            </div>
-          </div>
-
-          <div style={{ background: "#ffffff", borderRadius: 12, padding: 20, border: "1px solid #e2e8f0" }}>
-            <div style={{ fontSize: "0.82rem", color: "#64748b", fontWeight: 600 }}>Quick Phone Leads</div>
-            <div style={{ fontSize: "1.9rem", fontWeight: 800, color: "var(--bp-navy-950)", marginTop: 4 }}>
-              {leads.length}
-            </div>
-            <div style={{ fontSize: "0.75rem", color: "#6366f1", marginTop: 4 }}>
-              Hero & WhatsApp inquiries
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div
-          style={{
-            background: "#ffffff",
-            borderRadius: "12px",
-            padding: "14px 18px",
-            border: "1px solid #e2e8f0",
-            marginBottom: 20,
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <button
-              onClick={() => setActiveTab("bookings")}
-              style={{
-                padding: "9px 16px",
-                borderRadius: "8px",
-                fontWeight: 700,
-                fontSize: "0.86rem",
-                cursor: "pointer",
-                border: "none",
-                background: activeTab === "bookings" ? "var(--bp-navy-950)" : "#f1f5f9",
-                color: activeTab === "bookings" ? "#ffffff" : "#475569",
-              }}
-            >
-              📅 Demo Bookings ({bookings.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab("credentials")}
-              style={{
-                padding: "9px 16px",
-                borderRadius: "8px",
-                fontWeight: 700,
-                fontSize: "0.86rem",
-                cursor: "pointer",
-                border: "none",
-                background: activeTab === "credentials" ? "var(--bp-navy-950)" : "#f1f5f9",
-                color: activeTab === "credentials" ? "#ffffff" : "#475569",
-              }}
-            >
-              🔑 Student Login Credentials ({studentAccounts.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab("cms")}
-              style={{
-                padding: "9px 16px",
-                borderRadius: "8px",
-                fontWeight: 700,
-                fontSize: "0.86rem",
-                cursor: "pointer",
-                border: "none",
-                background: activeTab === "cms" ? "var(--bp-navy-950)" : "#f1f5f9",
-                color: activeTab === "cms" ? "#ffffff" : "#475569",
-              }}
-            >
-              ✏️ Edit Landing Page & Sections
-            </button>
-
-            <button
-              onClick={() => setActiveTab("leads")}
-              style={{
-                padding: "9px 16px",
-                borderRadius: "8px",
-                fontWeight: 700,
-                fontSize: "0.86rem",
-                cursor: "pointer",
-                border: "none",
-                background: activeTab === "leads" ? "var(--bp-navy-950)" : "#f1f5f9",
-                color: activeTab === "leads" ? "#ffffff" : "#475569",
-              }}
-            >
-              📲 Quick Phone Leads ({leads.length})
-            </button>
-          </div>
-
-          {activeTab !== "cms" && (
-            <div style={{ position: "relative", minWidth: "240px", flex: "1 1 240px", maxWidth: "360px" }}>
-              <Search
-                size={16}
-                style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}
-              />
-              <input
-                type="text"
-                placeholder="Search student, parent, phone, email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+            {isCmsView ? (
+              <button
+                onClick={handleSaveSiteContent}
+                disabled={savingCms}
+                className="btn btn-primary shining"
+                style={{ padding: "8px 18px", minHeight: 38, fontSize: "0.84rem" }}
+              >
+                <Save size={15} />
+                <span>{savingCms ? "Saving..." : "Save Section Changes"}</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => openCredentialGenerator()}
                 style={{
-                  width: "100%",
-                  padding: "8px 12px 8px 36px",
-                  borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  fontSize: "0.85rem",
-                  outline: "none",
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* TAB 1: DEMO BOOKINGS */}
-        {activeTab === "bookings" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {filteredBookings.length === 0 ? (
-              <div
-                style={{
-                  background: "#ffffff",
-                  padding: "60px 20px",
-                  borderRadius: 12,
-                  textAlign: "center",
-                  color: "#64748b",
-                  border: "1px solid #e2e8f0",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                  color: "#ffffff",
+                  padding: "8px 14px",
+                  borderRadius: 10,
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  border: "none",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(16, 185, 129, 0.25)",
                 }}
               >
-                <Database size={40} color="#94a3b8" style={{ marginBottom: 12 }} />
-                <h3 style={{ fontSize: "1.1rem", fontWeight: 700 }}>No Demo Bookings Found</h3>
-              </div>
-            ) : (
-              filteredBookings.map((b) => (
+                <Key size={15} />
+                <span>+ Generate Student Login</span>
+              </button>
+            )}
+
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "#f1f5f9",
+                color: "#334155",
+                padding: "8px 12px",
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: "0.82rem",
+                border: "1px solid #e2e8f0",
+                cursor: "pointer",
+              }}
+            >
+              <RefreshCw size={14} />
+              <span>{loading ? "Syncing..." : "Refresh"}</span>
+            </button>
+          </div>
+        </header>
+
+        {/* WORKSPACE BODY */}
+        <main style={{ padding: "24px", maxWidth: 1320, width: "100%", margin: "0 auto" }}>
+          {/* =================================================================
+              VIEW 1: EXECUTIVE OVERVIEW
+              ================================================================= */}
+          {activeView === "overview" && (
+            <div>
+              {/* 4 KPI Stat Cards */}
+              <div className="admin-kpi-grid">
+                <div className="admin-kpi-card" onClick={() => setActiveView("bookings")} style={{ cursor: "pointer" }}>
+                  <div>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Demo Bookings
+                    </div>
+                    <div style={{ fontSize: "2.1rem", fontWeight: 800, color: "#0f172a", margin: "6px 0 4px" }}>
+                      {bookings.length}
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "#059669", fontWeight: 600 }}>
+                      Click to confirm & email →
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 12,
+                      background: "#eff6ff",
+                      color: "#1d4ed8",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Calendar size={24} />
+                  </div>
+                </div>
+
                 <div
-                  key={b.id}
+                  className="admin-kpi-card"
+                  onClick={() => setActiveView("credentials")}
+                  style={{ cursor: "pointer" }}
+                >
+                  <div>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Student Accounts
+                    </div>
+                    <div style={{ fontSize: "2.1rem", fontWeight: 800, color: "#059669", margin: "6px 0 4px" }}>
+                      {studentAccounts.length}
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600 }}>
+                      Active portal credentials →
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 12,
+                      background: "#ecfdf5",
+                      color: "#059669",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Key size={24} />
+                  </div>
+                </div>
+
+                <div className="admin-kpi-card" onClick={() => setActiveView("leads")} style={{ cursor: "pointer" }}>
+                  <div>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Quick Phone Leads
+                    </div>
+                    <div style={{ fontSize: "2.1rem", fontWeight: 800, color: "#0f172a", margin: "6px 0 4px" }}>
+                      {leads.length}
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "#6366f1", fontWeight: 600 }}>
+                      Hero & WhatsApp captures →
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 12,
+                      background: "#eef2ff",
+                      color: "#4f46e5",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <PhoneCall size={24} />
+                  </div>
+                </div>
+
+                <div
+                  className="admin-kpi-card"
+                  onClick={() => setActiveView("cms-general")}
+                  style={{ cursor: "pointer" }}
+                >
+                  <div>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                      Website CMS Sections
+                    </div>
+                    <div style={{ fontSize: "2.1rem", fontWeight: 800, color: "#d97706", margin: "6px 0 4px" }}>
+                      10
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "#d97706", fontWeight: 600 }}>
+                      Edit landing page live →
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 12,
+                      background: "#fffbeb",
+                      color: "#d97706",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Globe size={24} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Demo Bookings Panel */}
+              <div className="admin-panel-card" style={{ marginBottom: 24 }}>
+                <div
                   style={{
-                    background: "#ffffff",
-                    borderRadius: 12,
-                    border: "1px solid #e2e8f0",
-                    padding: 20,
+                    padding: "18px 22px",
+                    borderBottom: "1px solid #e2e8f0",
                     display: "flex",
-                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800 }}>
+                      Recent 1:1 Demo Bookings
+                    </h2>
+                    <p style={{ margin: "2px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                      Confirm bookings to trigger HTML emails to both the parent and admin, or generate student login credentials.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveView("bookings")}
+                    style={{
+                      background: "#f1f5f9",
+                      color: "#0f172a",
+                      padding: "7px 14px",
+                      borderRadius: 8,
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    View All Bookings ({bookings.length}) →
+                  </button>
+                </div>
+
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>
+                        <th style={{ padding: "12px 18px", color: "#64748b" }}>Ref</th>
+                        <th style={{ padding: "12px 18px", color: "#64748b" }}>Student & Grade</th>
+                        <th style={{ padding: "12px 18px", color: "#64748b" }}>Course Program</th>
+                        <th style={{ padding: "12px 18px", color: "#64748b" }}>Parent & Contact</th>
+                        <th style={{ padding: "12px 18px", color: "#64748b" }}>Status</th>
+                        <th style={{ padding: "12px 18px", color: "#64748b", textAlign: "right" }}>Quick Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bookings.slice(0, 5).map((b) => (
+                        <tr key={b.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "14px 18px", fontWeight: 800, color: "#475569" }}>
+                            #BP-{String(b.id).padStart(5, "0")}
+                          </td>
+                          <td style={{ padding: "14px 18px" }}>
+                            <div style={{ fontWeight: 800, color: "#0f172a" }}>{b.studentName}</div>
+                            <div style={{ fontSize: "0.75rem", color: "#0284c7", fontWeight: 700 }}>{b.grade}</div>
+                          </td>
+                          <td style={{ padding: "14px 18px", fontWeight: 700, color: "#059669" }}>
+                            {b.courseName}
+                            <div style={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 500 }}>
+                              {b.preferredTime}
+                            </div>
+                          </td>
+                          <td style={{ padding: "14px 18px" }}>
+                            <div style={{ fontWeight: 700 }}>{b.parentName}</div>
+                            <div style={{ fontSize: "0.76rem", color: "#64748b" }}>
+                              {b.phoneNumber} {b.email ? `• ${b.email}` : ""}
+                            </div>
+                          </td>
+                          <td style={{ padding: "14px 18px" }}>
+                            <span
+                              style={{
+                                background: b.status === "confirmed" ? "#dcfce7" : "#fef3c7",
+                                color: b.status === "confirmed" ? "#15803d" : "#b45309",
+                                padding: "4px 10px",
+                                borderRadius: 999,
+                                fontSize: "0.72rem",
+                                fontWeight: 800,
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              {b.status || "confirmed"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "14px 18px", textAlign: "right" }}>
+                            <div style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                              <button
+                                onClick={() => handleConfirmBooking(b)}
+                                disabled={confirmingId === b.id}
+                                style={{
+                                  background: "#0284c7",
+                                  color: "#fff",
+                                  border: "none",
+                                  padding: "6px 10px",
+                                  borderRadius: 6,
+                                  fontSize: "0.75rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                                title="Confirm booking and send HTML confirmation emails to user & admin"
+                              >
+                                {confirmingId === b.id ? "Sending..." : "✓ Confirm & Email"}
+                              </button>
+                              <button
+                                onClick={() => openCredentialGenerator(b)}
+                                style={{
+                                  background: "#059669",
+                                  color: "#fff",
+                                  border: "none",
+                                  padding: "6px 10px",
+                                  borderRadius: 6,
+                                  fontSize: "0.75rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                                title="Generate Student Login Credentials & Send Welcome Email"
+                              >
+                                🔑 Generate Login
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Quick CMS Section Jump Grid */}
+              <div className="admin-panel-card" style={{ padding: 22 }}>
+                <h2 style={{ margin: "0 0 6px", fontSize: "1.05rem", fontWeight: 800 }}>
+                  Landing Page CMS Quick Editor
+                </h2>
+                <p style={{ margin: "0 0 16px", fontSize: "0.8rem", color: "#64748b" }}>
+                  Select any section of the landing page below to customize its text, courses, FAQs, or contact details.
+                </p>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
                     gap: 12,
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "#64748b" }}>
-                          #BP-{String(b.id).padStart(5, "0")}
-                        </span>
-                        <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--bp-navy-950)" }}>
-                          {b.studentName}
-                        </span>
-                        <span
-                          style={{
-                            background: "#e0f2fe",
-                            color: "#0369a1",
-                            padding: "3px 10px",
-                            borderRadius: 999,
-                            fontSize: "0.75rem",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {b.grade}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.9rem",
-                          fontWeight: 700,
-                          color: "var(--bp-navy-800)",
-                          marginTop: 4,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                      >
-                        <BookOpen size={15} color="var(--bp-gold-600)" />
-                        {b.courseName}
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span
-                        style={{
-                          background: b.status === "confirmed" ? "#dcfce7" : "#fef3c7",
-                          color: b.status === "confirmed" ? "#15803d" : "#b45309",
-                          padding: "4px 12px",
-                          borderRadius: 999,
-                          fontSize: "0.75rem",
-                          fontWeight: 800,
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {b.status || "confirmed"}
-                      </span>
-
-                      <button
-                        onClick={() => handleConfirmBooking(b)}
-                        disabled={confirmingId === b.id}
-                        style={{
-                          background: "#0284c7",
-                          color: "#ffffff",
-                          border: "none",
-                          padding: "6px 12px",
-                          borderRadius: 6,
-                          fontSize: "0.78rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                        }}
-                      >
-                        <CheckCircle size={14} />
-                        <span>
-                          {confirmingId === b.id ? "Sending Confirmation..." : "Confirm & Send Confirmation Email"}
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={() => openCredentialGenerator(b)}
-                        style={{
-                          background: "#059669",
-                          color: "#ffffff",
-                          border: "none",
-                          padding: "6px 12px",
-                          borderRadius: 6,
-                          fontSize: "0.78rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                        }}
-                      >
-                        <Key size={14} />
-                        <span>Generate Login Credentials</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <hr style={{ border: "none", borderTop: "1px solid #f1f5f9", margin: 0 }} />
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                      gap: 12,
-                      fontSize: "0.85rem",
-                    }}
-                  >
-                    <div>
-                      <div style={{ color: "#64748b", fontSize: "0.74rem", fontWeight: 600 }}>PARENT / GUARDIAN</div>
-                      <div style={{ fontWeight: 700, marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
-                        <User size={14} color="#64748b" /> {b.parentName}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ color: "#64748b", fontSize: "0.74rem", fontWeight: 600 }}>PHONE / WHATSAPP</div>
-                      <div style={{ fontWeight: 700, marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
-                        <Phone size={14} color="#64748b" /> {b.phoneNumber}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ color: "#64748b", fontSize: "0.74rem", fontWeight: 600 }}>EMAIL ADDRESS</div>
-                      <div style={{ fontWeight: 600, marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
-                        <Mail size={14} color="#64748b" /> {b.email || "Not provided"}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ color: "#64748b", fontSize: "0.74rem", fontWeight: 600 }}>PREFERRED TIME SLOT</div>
-                      <div style={{ fontWeight: 600, marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
-                        <Clock size={14} color="#64748b" /> {b.preferredTime}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                      gap: 10,
-                      paddingTop: 8,
-                      borderTop: "1px dashed #e2e8f0",
-                    }}
-                  >
-                    <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
-                      Booked on: {new Date(b.createdAt).toLocaleString()}
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <a
-                        href={`https://wa.me/${cleanPhoneForWhatsApp(b.phoneNumber)}?text=Hello%20${encodeURIComponent(
-                          b.parentName
-                        )},%20this%20is%20Bright%20Path%20Learning%20Hub%20confirming%20your%201:1%20demo%20booking%20for%20${encodeURIComponent(
-                          b.studentName
-                        )}.`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          background: "#25d366",
-                          color: "#ffffff",
-                          padding: "6px 12px",
-                          borderRadius: 6,
-                          fontSize: "0.78rem",
-                          fontWeight: 700,
-                          textDecoration: "none",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                        }}
-                      >
-                        <ExternalLink size={13} /> WhatsApp Parent
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* TAB 2: STUDENT LOGIN CREDENTIALS */}
-        {activeTab === "credentials" && (
-          <div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 16,
-                flexWrap: "wrap",
-                gap: 10,
-              }}
-            >
-              <div>
-                <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800 }}>
-                  Generated Student Login Credentials
-                </h2>
-                <p style={{ margin: "4px 0 0", fontSize: "0.84rem", color: "#64748b" }}>
-                  Generate student login credentials, copy them in 1 click to share on WhatsApp, and automatically email a Welcome & Confirmation message.
-                </p>
-              </div>
-              <button
-                onClick={() => openCredentialGenerator()}
-                className="btn btn-primary"
-                style={{ padding: "10px 18px", fontSize: "0.86rem" }}
-              >
-                <Key size={16} />
-                <span>Generate New User Credentials</span>
-              </button>
-            </div>
-
-            {studentAccounts.length === 0 ? (
-              <div
-                style={{
-                  background: "#ffffff",
-                  padding: "50px 20px",
-                  borderRadius: 12,
-                  textAlign: "center",
-                  border: "1px solid #e2e8f0",
-                  color: "#64748b",
-                }}
-              >
-                <Key size={38} color="#94a3b8" style={{ marginBottom: 10 }} />
-                <h3 style={{ margin: 0, fontSize: "1.05rem", color: "var(--bp-navy-950)" }}>
-                  No Student Credentials Generated Yet
-                </h3>
-                <p style={{ fontSize: "0.85rem", marginTop: 6 }}>
-                  Click &ldquo;Generate Login Credentials&rdquo; on any booking or use the button above to create login credentials for a student.
-                </p>
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
-                {studentAccounts.map((acc) => (
-                  <div
-                    key={acc.id}
-                    style={{
-                      background: "#ffffff",
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                      padding: 20,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 12,
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div>
-                        <div style={{ fontWeight: 800, fontSize: "1.1rem", color: "var(--bp-navy-950)" }}>
-                          {acc.studentName} ({acc.grade})
-                        </div>
-                        <div style={{ fontSize: "0.82rem", color: "#059669", fontWeight: 700 }}>
-                          {acc.courseName}
-                        </div>
-                        <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: 2 }}>
-                          Parent: {acc.parentName} • {acc.email}
-                        </div>
-                      </div>
-                      <span
-                        style={{
-                          background: "#dcfce7",
-                          color: "#15803d",
-                          padding: "3px 10px",
-                          borderRadius: 999,
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                        }}
-                      >
-                        ACTIVE
-                      </span>
-                    </div>
-
-                    <div
+                  {[
+                    { id: "cms-general", title: "General & Footer", desc: "Phone, Email, Address, Social" },
+                    { id: "cms-hero", title: "Hero Banner", desc: "Headlines & Rotating Skills" },
+                    { id: "cms-benefits", title: "4 Benefits Strip", desc: "Key Value Props" },
+                    { id: "cms-courses", title: "Flagship Courses", desc: "All 4 Course Cards" },
+                    { id: "cms-why", title: "Why Bright Path", desc: "3 Core Pedagogy Cards" },
+                    { id: "cms-testimonials", title: "Parent Testimonials", desc: "Reviews & Video URL" },
+                    { id: "cms-stars", title: "Shining Stars", desc: "Student Olympiad Winners" },
+                    { id: "cms-guarantee", title: "100% Guarantee", desc: "Outcome Policy & Seal" },
+                    { id: "cms-faq", title: "FAQs Section", desc: "Add / Edit Questions" },
+                    { id: "cms-curriculum", title: "Curriculum Table", desc: "Course Matrix Rows" },
+                  ].map((sec) => (
+                    <button
+                      key={sec.id}
+                      onClick={() => setActiveView(sec.id as ActiveView)}
                       style={{
                         background: "#f8fafc",
-                        border: "1px dashed #94a3b8",
-                        borderRadius: 8,
-                        padding: "12px 14px",
-                        fontFamily: "monospace",
-                        fontSize: "0.85rem",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 12,
+                        padding: "14px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
                       }}
                     >
-                      <div>
-                        <strong>Username:</strong> <span style={{ color: "#0f172a" }}>{acc.username}</span>
-                      </div>
-                      <div style={{ marginTop: 4 }}>
-                        <strong>Password:</strong> <span style={{ color: "#dc2626" }}>{acc.password}</span>
-                      </div>
-                      <div style={{ marginTop: 4, fontFamily: "var(--font-sans)", fontSize: "0.78rem", color: "#475569" }}>
-                        <strong>Portal:</strong> /portal
-                      </div>
-                    </div>
+                      <div style={{ fontWeight: 800, fontSize: "0.88rem", color: "#0f172a" }}>{sec.title}</div>
+                      <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: 3 }}>{sec.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button
-                        onClick={() => copyCredentials(acc, `acc-${acc.id}`)}
-                        style={{
-                          flex: 1,
-                          background: copiedId === `acc-${acc.id}` ? "#059669" : "var(--bp-navy-950)",
-                          color: "#ffffff",
-                          border: "none",
-                          padding: "8px 12px",
-                          borderRadius: 8,
-                          fontSize: "0.8rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 6,
-                        }}
-                      >
-                        {copiedId === `acc-${acc.id}` ? <Check size={14} /> : <Copy size={14} />}
-                        <span>{copiedId === `acc-${acc.id}` ? "Copied!" : "Copy Credentials"}</span>
-                      </button>
-
-                      <a
-                        href={`https://wa.me/${cleanPhoneForWhatsApp(acc.phoneNumber)}?text=${encodeURIComponent(
-                          formatCredentialText(acc)
-                        )}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          background: "#25D366",
-                          color: "#ffffff",
-                          padding: "8px 12px",
-                          borderRadius: 8,
-                          fontSize: "0.8rem",
-                          fontWeight: 700,
-                          textDecoration: "none",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                        }}
-                      >
-                        <ExternalLink size={14} /> Send on WhatsApp
-                      </a>
-                    </div>
-                  </div>
+          {/* =================================================================
+              VIEW 2: DEMO BOOKINGS
+              ================================================================= */}
+          {activeView === "bookings" && (
+            <div>
+              {/* Filter Pills */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+                {[
+                  { id: "all", label: `All Bookings (${bookings.length})` },
+                  {
+                    id: "confirmed",
+                    label: `Confirmed (${bookings.filter((b) => (b.status || "confirmed") === "confirmed").length})`,
+                  },
+                  {
+                    id: "pending",
+                    label: `Pending (${bookings.filter((b) => b.status === "pending").length})`,
+                  },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setBookingFilter(f.id as any)}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: 999,
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      border: "1px solid #e2e8f0",
+                      background: bookingFilter === f.id ? "#071527" : "#ffffff",
+                      color: bookingFilter === f.id ? "#ffffff" : "#475569",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {f.label}
+                  </button>
                 ))}
               </div>
-            )}
-          </div>
-        )}
 
-        {/* TAB 3: LANDING PAGE & SITE CONTENT CMS EDITOR */}
-        {activeTab === "cms" && (
-          <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 20, alignItems: "start" }}>
-            {/* Left Section Selector */}
-            <div
-              style={{
-                background: "#ffffff",
-                borderRadius: 12,
-                border: "1px solid #e2e8f0",
-                padding: 12,
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-              }}
-            >
-              {[
-                { id: "general", label: "1. General, Header & Footer" },
-                { id: "hero", label: "2. Hero Banner Section" },
-                { id: "benefits", label: "3. 4 Key Benefits Strip" },
-                { id: "courses", label: "4. Flagship Courses" },
-                { id: "why", label: "5. Why Bright Path" },
-                { id: "testimonials", label: "6. Parent Testimonials" },
-                { id: "stars", label: "7. Shining Stars" },
-                { id: "guarantee", label: "8. 100% Outcome Guarantee" },
-                { id: "faq", label: "9. FAQs Section" },
-                { id: "curriculum", label: "10. Curriculum Table" },
-              ].map((sec) => (
-                <button
-                  key={sec.id}
-                  onClick={() => setCmsSection(sec.id as any)}
-                  style={{
-                    textAlign: "left",
-                    padding: "10px 12px",
-                    borderRadius: 8,
-                    border: "none",
-                    fontWeight: 700,
-                    fontSize: "0.83rem",
-                    cursor: "pointer",
-                    background: cmsSection === sec.id ? "var(--bp-navy-950)" : "transparent",
-                    color: cmsSection === sec.id ? "#ffffff" : "#334155",
-                  }}
-                >
-                  {sec.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Right Section Editor Form */}
-            <div
-              style={{
-                background: "#ffffff",
-                borderRadius: 12,
-                border: "1px solid #e2e8f0",
-                padding: 24,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 20,
-                  paddingBottom: 14,
-                  borderBottom: "1px solid #e2e8f0",
-                }}
-              >
-                <div>
-                  <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800 }}>
-                    Landing Page & Website Content Editor
-                  </h2>
-                  <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: "#64748b" }}>
-                    Changes saved here update the live landing page immediately.
-                  </p>
+              {filteredBookings.length === 0 ? (
+                <div className="admin-panel-card" style={{ padding: "60px 20px", textAlign: "center" }}>
+                  <Calendar size={42} color="#94a3b8" style={{ margin: "0 auto 12px" }} />
+                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800 }}>No Demo Bookings Found</h3>
                 </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {filteredBookings.map((b) => (
+                    <div key={b.id} className="admin-panel-card" style={{ padding: 22 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          flexWrap: "wrap",
+                          gap: 12,
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span
+                              style={{
+                                background: "#f1f5f9",
+                                color: "#475569",
+                                padding: "3px 8px",
+                                borderRadius: 6,
+                                fontSize: "0.75rem",
+                                fontWeight: 800,
+                              }}
+                            >
+                              #BP-{String(b.id).padStart(5, "0")}
+                            </span>
+                            <span style={{ fontSize: "1.18rem", fontWeight: 800, color: "#0f172a" }}>
+                              {b.studentName}
+                            </span>
+                            <span
+                              style={{
+                                background: "#e0f2fe",
+                                color: "#0369a1",
+                                padding: "3px 10px",
+                                borderRadius: 999,
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {b.grade}
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "0.9rem",
+                              fontWeight: 700,
+                              color: "#059669",
+                              marginTop: 6,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <BookOpen size={15} /> {b.courseName}
+                          </div>
+                        </div>
 
-                <button
-                  onClick={handleSaveSiteContent}
-                  disabled={savingCms}
-                  className="btn btn-primary shining"
-                  style={{ padding: "10px 20px", fontSize: "0.88rem" }}
-                >
-                  <Save size={16} />
-                  <span>{savingCms ? "Saving..." : "Save All Changes"}</span>
-                </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span
+                            style={{
+                              background: b.status === "confirmed" ? "#dcfce7" : "#fef3c7",
+                              color: b.status === "confirmed" ? "#15803d" : "#b45309",
+                              padding: "5px 12px",
+                              borderRadius: 999,
+                              fontSize: "0.74rem",
+                              fontWeight: 800,
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            {b.status || "confirmed"}
+                          </span>
+
+                          <button
+                            onClick={() => handleConfirmBooking(b)}
+                            disabled={confirmingId === b.id}
+                            style={{
+                              background: "#0284c7",
+                              color: "#ffffff",
+                              border: "none",
+                              padding: "8px 14px",
+                              borderRadius: 8,
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <CheckCircle size={15} />
+                            <span>
+                              {confirmingId === b.id
+                                ? "Sending Confirmation..."
+                                : "Confirm & Send Confirmation Email"}
+                            </span>
+                          </button>
+
+                          <button
+                            onClick={() => openCredentialGenerator(b)}
+                            style={{
+                              background: "#059669",
+                              color: "#ffffff",
+                              border: "none",
+                              padding: "8px 14px",
+                              borderRadius: 8,
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <Key size={15} />
+                            <span>Generate Login Credentials</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <hr style={{ border: "none", borderTop: "1px solid #f1f5f9", margin: "14px 0" }} />
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                          gap: 14,
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        <div>
+                          <div style={{ color: "#64748b", fontSize: "0.72rem", fontWeight: 700 }}>PARENT / GUARDIAN</div>
+                          <div style={{ fontWeight: 700, marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}>
+                            <User size={14} color="#64748b" /> {b.parentName}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ color: "#64748b", fontSize: "0.72rem", fontWeight: 700 }}>PHONE / WHATSAPP</div>
+                          <div style={{ fontWeight: 700, marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}>
+                            <Phone size={14} color="#64748b" /> {b.phoneNumber}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ color: "#64748b", fontSize: "0.72rem", fontWeight: 700 }}>EMAIL ADDRESS</div>
+                          <div style={{ fontWeight: 600, marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}>
+                            <Mail size={14} color="#64748b" /> {b.email || "Not provided"}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ color: "#64748b", fontSize: "0.72rem", fontWeight: 700 }}>PREFERRED SLOT</div>
+                          <div style={{ fontWeight: 600, marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}>
+                            <Clock size={14} color="#64748b" /> {b.preferredTime}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: 10,
+                          marginTop: 14,
+                          paddingTop: 12,
+                          borderTop: "1px dashed #e2e8f0",
+                        }}
+                      >
+                        <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+                          Booked on: {new Date(b.createdAt).toLocaleString()}
+                        </div>
+                        <a
+                          href={`https://wa.me/${cleanPhoneForWhatsApp(b.phoneNumber)}?text=Hello%20${encodeURIComponent(
+                            b.parentName
+                          )},%20this%20is%20Bright%20Path%20Learning%20Hub%20confirming%20your%201:1%20demo%20booking%20for%20${encodeURIComponent(
+                            b.studentName
+                          )}.`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            background: "#25d366",
+                            color: "#ffffff",
+                            padding: "7px 14px",
+                            borderRadius: 8,
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            textDecoration: "none",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <ExternalLink size={13} /> Message Parent on WhatsApp
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* =================================================================
+              VIEW 3: STUDENT LOGIN CREDENTIALS
+              ================================================================= */}
+          {activeView === "credentials" && (
+            <div>
+              {filteredCredentials.length === 0 ? (
+                <div className="admin-panel-card" style={{ padding: "60px 20px", textAlign: "center" }}>
+                  <Key size={42} color="#94a3b8" style={{ margin: "0 auto 12px" }} />
+                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800 }}>
+                    No Student Credentials Generated Yet
+                  </h3>
+                  <p style={{ fontSize: "0.85rem", color: "#64748b", margin: "6px 0 18px" }}>
+                    Generate login credentials for a student to automatically email their Welcome & Confirmation package and copy their login details.
+                  </p>
+                  <button
+                    onClick={() => openCredentialGenerator()}
+                    className="btn btn-primary"
+                    style={{ padding: "10px 20px", fontSize: "0.86rem" }}
+                  >
+                    <Key size={16} /> Generate First Student Login
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 18 }}>
+                  {filteredCredentials.map((acc) => (
+                    <div
+                      key={acc.id}
+                      className="admin-panel-card"
+                      style={{ padding: 22, display: "flex", flexDirection: "column", gap: 14 }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: "1.12rem", color: "#0f172a" }}>
+                            {acc.studentName} ({acc.grade})
+                          </div>
+                          <div style={{ fontSize: "0.82rem", color: "#059669", fontWeight: 700, marginTop: 2 }}>
+                            {acc.courseName}
+                          </div>
+                          <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: 2 }}>
+                            Parent: {acc.parentName} • {acc.email}
+                          </div>
+                        </div>
+                        <span
+                          style={{
+                            background: "#dcfce7",
+                            color: "#15803d",
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            fontSize: "0.7rem",
+                            fontWeight: 800,
+                          }}
+                        >
+                          ACTIVE
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          background: "#f8fafc",
+                          border: "1px dashed #cbd5e1",
+                          borderRadius: 10,
+                          padding: "12px 14px",
+                          fontFamily: "monospace",
+                          fontSize: "0.86rem",
+                        }}
+                      >
+                        <div>
+                          <strong>Username:</strong> <span style={{ color: "#0f172a" }}>{acc.username}</span>
+                        </div>
+                        <div style={{ marginTop: 4 }}>
+                          <strong>Password:</strong> <span style={{ color: "#dc2626" }}>{acc.password}</span>
+                        </div>
+                        <div style={{ marginTop: 4, fontFamily: "var(--font-sans)", fontSize: "0.76rem", color: "#64748b" }}>
+                          <strong>Student Portal:</strong> /portal
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button
+                          onClick={() => copyCredentials(acc, `acc-${acc.id}`)}
+                          style={{
+                            flex: 1,
+                            background: copiedId === `acc-${acc.id}` ? "#059669" : "#071527",
+                            color: "#ffffff",
+                            border: "none",
+                            padding: "9px 12px",
+                            borderRadius: 8,
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                          }}
+                        >
+                          {copiedId === `acc-${acc.id}` ? <Check size={14} /> : <Copy size={14} />}
+                          <span>{copiedId === `acc-${acc.id}` ? "Copied!" : "Copy Credentials"}</span>
+                        </button>
+
+                        <a
+                          href={`https://wa.me/${cleanPhoneForWhatsApp(acc.phoneNumber)}?text=${encodeURIComponent(
+                            formatCredentialText(acc)
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            background: "#25D366",
+                            color: "#ffffff",
+                            padding: "9px 12px",
+                            borderRadius: 8,
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            textDecoration: "none",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
+                          <ExternalLink size={14} /> WhatsApp
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* =================================================================
+              VIEW 4: QUICK PHONE LEADS
+              ================================================================= */}
+          {activeView === "leads" && (
+            <div className="admin-panel-card">
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>
+                      <th style={{ padding: "14px 18px", color: "#64748b" }}>ID</th>
+                      <th style={{ padding: "14px 18px", color: "#64748b" }}>Phone Number</th>
+                      <th style={{ padding: "14px 18px", color: "#64748b" }}>Source</th>
+                      <th style={{ padding: "14px 18px", color: "#64748b" }}>Captured At</th>
+                      <th style={{ padding: "14px 18px", color: "#64748b", textAlign: "right" }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLeads.map((l) => (
+                      <tr key={l.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "14px 18px", color: "#94a3b8", fontWeight: 700 }}>#{l.id}</td>
+                        <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0f172a" }}>
+                          {l.countryCode || ""} {l.phoneNumber}
+                        </td>
+                        <td style={{ padding: "14px 18px" }}>
+                          <span
+                            style={{
+                              background: "#ede9fe",
+                              color: "#6d28d9",
+                              padding: "3px 10px",
+                              borderRadius: 999,
+                              fontSize: "0.74rem",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {l.source}
+                          </span>
+                        </td>
+                        <td style={{ padding: "14px 18px", color: "#64748b" }}>
+                          {new Date(l.createdAt).toLocaleString()}
+                        </td>
+                        <td style={{ padding: "14px 18px", textAlign: "right" }}>
+                          <a
+                            href={`https://wa.me/${cleanPhoneForWhatsApp(
+                              `${l.countryCode || "+234"}${l.phoneNumber}`
+                            )}?text=Hello%20from%20Bright%20Path%20Learning%20Hub!`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              background: "#25d366",
+                              color: "#ffffff",
+                              padding: "6px 12px",
+                              borderRadius: 8,
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              textDecoration: "none",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                            }}
+                          >
+                            <ExternalLink size={13} /> Follow Up on WhatsApp
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+            </div>
+          )}
 
+          {/* =================================================================
+              CMS VIEWS: LANDING PAGE & SECTIONS EDITOR
+              ================================================================= */}
+          {isCmsView && (
+            <div className="admin-panel-card" style={{ padding: 26 }}>
               {/* 1. GENERAL & FOOTER */}
-              {cmsSection === "general" && (
-                <div style={{ display: "grid", gap: 14 }}>
+              {activeView === "cms-general" && (
+                <div style={{ display: "grid", gap: 16 }}>
                   <div className="form-row-2col">
                     <div className="form-group">
                       <label className="form-label">Site / Brand Name</label>
@@ -1294,8 +1822,8 @@ export default function AdminDashboardPage() {
               )}
 
               {/* 2. HERO SECTION */}
-              {cmsSection === "hero" && (
-                <div style={{ display: "grid", gap: 14 }}>
+              {activeView === "cms-hero" && (
+                <div style={{ display: "grid", gap: 16 }}>
                   <div className="form-group">
                     <label className="form-label">Top Badge Pill Text</label>
                     <input
@@ -1378,7 +1906,10 @@ export default function AdminDashboardPage() {
                           ...siteContent,
                           hero: {
                             ...siteContent.hero,
-                            rotatingWords: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                            rotatingWords: e.target.value
+                              .split(",")
+                              .map((s) => s.trim())
+                              .filter(Boolean),
                           },
                         })
                       }
@@ -1428,48 +1959,19 @@ export default function AdminDashboardPage() {
                       />
                     </div>
                   </div>
-
-                  <div className="form-row-2col">
-                    <div className="form-group">
-                      <label className="form-label">Right Seal Card Title</label>
-                      <input
-                        className="form-input"
-                        value={siteContent.hero.sealTitle}
-                        onChange={(e) =>
-                          setSiteContent({
-                            ...siteContent,
-                            hero: { ...siteContent.hero, sealTitle: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Right Seal Badge</label>
-                      <input
-                        className="form-input"
-                        value={siteContent.hero.sealBadge}
-                        onChange={(e) =>
-                          setSiteContent({
-                            ...siteContent,
-                            hero: { ...siteContent.hero, sealBadge: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
                 </div>
               )}
 
               {/* 3. BENEFITS STRIP */}
-              {cmsSection === "benefits" && (
+              {activeView === "cms-benefits" && (
                 <div style={{ display: "grid", gap: 16 }}>
                   {siteContent.benefits.map((b, idx) => (
                     <div
                       key={idx}
-                      style={{ padding: 14, border: "1px solid #e2e8f0", borderRadius: 10, background: "#f8fafc" }}
+                      style={{ padding: 16, border: "1px solid #e2e8f0", borderRadius: 12, background: "#f8fafc" }}
                     >
-                      <div style={{ fontWeight: 700, fontSize: "0.85rem", marginBottom: 8 }}>
-                        Benefit #{idx + 1}
+                      <div style={{ fontWeight: 800, fontSize: "0.86rem", marginBottom: 10 }}>
+                        Benefit Item #{idx + 1}
                       </div>
                       <div className="form-row-2col">
                         <div className="form-group">
@@ -1503,7 +2005,7 @@ export default function AdminDashboardPage() {
               )}
 
               {/* 4. FLAGSHIP COURSES */}
-              {cmsSection === "courses" && (
+              {activeView === "cms-courses" && (
                 <div style={{ display: "grid", gap: 18 }}>
                   <div className="form-row-2col">
                     <div className="form-group">
@@ -1534,26 +2036,12 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Section Subtitle</label>
-                    <input
-                      className="form-input"
-                      value={siteContent.coursesSection.subtitle}
-                      onChange={(e) =>
-                        setSiteContent({
-                          ...siteContent,
-                          coursesSection: { ...siteContent.coursesSection, subtitle: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-
                   {siteContent.coursesSection.courses.map((course, idx) => (
                     <div
                       key={course.id}
-                      style={{ padding: 16, border: "1px solid #cbd5e1", borderRadius: 10, background: "#f8fafc" }}
+                      style={{ padding: 18, border: "1px solid #cbd5e1", borderRadius: 12, background: "#f8fafc" }}
                     >
-                      <div style={{ fontWeight: 800, marginBottom: 10, color: course.headerColor }}>
+                      <div style={{ fontWeight: 800, marginBottom: 12, color: course.headerColor }}>
                         Course #{idx + 1}: {course.title}
                       </div>
                       <div className="form-row-2col">
@@ -1619,39 +2107,6 @@ export default function AdminDashboardPage() {
                         />
                       </div>
 
-                      <div className="form-row-2col">
-                        <div className="form-group">
-                          <label className="form-label">Hours Badge</label>
-                          <input
-                            className="form-input"
-                            value={course.hours}
-                            onChange={(e) => {
-                              const next = [...siteContent.coursesSection.courses];
-                              next[idx] = { ...next[idx], hours: e.target.value };
-                              setSiteContent({
-                                ...siteContent,
-                                coursesSection: { ...siteContent.coursesSection, courses: next },
-                              });
-                            }}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Worksheets / Projects Badge</label>
-                          <input
-                            className="form-input"
-                            value={course.worksheetsCount}
-                            onChange={(e) => {
-                              const next = [...siteContent.coursesSection.courses];
-                              next[idx] = { ...next[idx], worksheetsCount: e.target.value };
-                              setSiteContent({
-                                ...siteContent,
-                                coursesSection: { ...siteContent.coursesSection, courses: next },
-                              });
-                            }}
-                          />
-                        </div>
-                      </div>
-
                       <div className="form-group">
                         <label className="form-label">Bullet Highlights (one per line)</label>
                         <textarea
@@ -1677,55 +2132,12 @@ export default function AdminDashboardPage() {
               )}
 
               {/* 5. WHY BRIGHT PATH */}
-              {cmsSection === "why" && (
+              {activeView === "cms-why" && (
                 <div style={{ display: "grid", gap: 16 }}>
-                  <div className="form-row-2col">
-                    <div className="form-group">
-                      <label className="form-label">Section Pill</label>
-                      <input
-                        className="form-input"
-                        value={siteContent.whySection.pill}
-                        onChange={(e) =>
-                          setSiteContent({
-                            ...siteContent,
-                            whySection: { ...siteContent.whySection, pill: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Section Title</label>
-                      <input
-                        className="form-input"
-                        value={siteContent.whySection.title}
-                        onChange={(e) =>
-                          setSiteContent({
-                            ...siteContent,
-                            whySection: { ...siteContent.whySection, title: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Section Subtitle</label>
-                    <input
-                      className="form-input"
-                      value={siteContent.whySection.subtitle}
-                      onChange={(e) =>
-                        setSiteContent({
-                          ...siteContent,
-                          whySection: { ...siteContent.whySection, subtitle: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-
                   {siteContent.whySection.points.map((pt, idx) => (
                     <div
                       key={idx}
-                      style={{ padding: 14, border: "1px solid #e2e8f0", borderRadius: 10, background: "#f8fafc" }}
+                      style={{ padding: 16, border: "1px solid #e2e8f0", borderRadius: 12, background: "#f8fafc" }}
                     >
                       <div className="form-row-2col">
                         <div className="form-group">
@@ -1781,41 +2193,25 @@ export default function AdminDashboardPage() {
               )}
 
               {/* 6. PARENT TESTIMONIALS */}
-              {cmsSection === "testimonials" && (
+              {activeView === "cms-testimonials" && (
                 <div style={{ display: "grid", gap: 16 }}>
-                  <div className="form-row-2col">
-                    <div className="form-group">
-                      <label className="form-label">Section Title</label>
-                      <input
-                        className="form-input"
-                        value={siteContent.testimonialsSection.title}
-                        onChange={(e) =>
-                          setSiteContent({
-                            ...siteContent,
-                            testimonialsSection: { ...siteContent.testimonialsSection, title: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">YouTube Embed URL</label>
-                      <input
-                        className="form-input"
-                        value={siteContent.testimonialsSection.videoUrl}
-                        onChange={(e) =>
-                          setSiteContent({
-                            ...siteContent,
-                            testimonialsSection: { ...siteContent.testimonialsSection, videoUrl: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
+                  <div className="form-group">
+                    <label className="form-label">Featured YouTube Video Embed URL</label>
+                    <input
+                      className="form-input"
+                      value={siteContent.testimonialsSection.videoUrl}
+                      onChange={(e) =>
+                        setSiteContent({
+                          ...siteContent,
+                          testimonialsSection: { ...siteContent.testimonialsSection, videoUrl: e.target.value },
+                        })
+                      }
+                    />
                   </div>
-
                   {siteContent.testimonialsSection.items.map((item, idx) => (
                     <div
                       key={idx}
-                      style={{ padding: 14, border: "1px solid #e2e8f0", borderRadius: 10, background: "#f8fafc" }}
+                      style={{ padding: 16, border: "1px solid #e2e8f0", borderRadius: 12, background: "#f8fafc" }}
                     >
                       <div className="form-row-2col">
                         <div className="form-group">
@@ -1850,7 +2246,7 @@ export default function AdminDashboardPage() {
                         </div>
                       </div>
                       <div className="form-group">
-                        <label className="form-label">Testimonial Quote</label>
+                        <label className="form-label">Review Quote</label>
                         <textarea
                           className="form-input"
                           rows={2}
@@ -1871,41 +2267,12 @@ export default function AdminDashboardPage() {
               )}
 
               {/* 7. SHINING STARS */}
-              {cmsSection === "stars" && (
+              {activeView === "cms-stars" && (
                 <div style={{ display: "grid", gap: 16 }}>
-                  <div className="form-row-2col">
-                    <div className="form-group">
-                      <label className="form-label">Section Title</label>
-                      <input
-                        className="form-input"
-                        value={siteContent.shiningStarsSection.title}
-                        onChange={(e) =>
-                          setSiteContent({
-                            ...siteContent,
-                            shiningStarsSection: { ...siteContent.shiningStarsSection, title: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Section Subtitle</label>
-                      <input
-                        className="form-input"
-                        value={siteContent.shiningStarsSection.subtitle}
-                        onChange={(e) =>
-                          setSiteContent({
-                            ...siteContent,
-                            shiningStarsSection: { ...siteContent.shiningStarsSection, subtitle: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-
                   {siteContent.shiningStarsSection.stars.map((star, idx) => (
                     <div
                       key={idx}
-                      style={{ padding: 14, border: "1px solid #e2e8f0", borderRadius: 10, background: "#f8fafc" }}
+                      style={{ padding: 16, border: "1px solid #e2e8f0", borderRadius: 12, background: "#f8fafc" }}
                     >
                       <div className="form-row-2col">
                         <div className="form-group">
@@ -1978,8 +2345,8 @@ export default function AdminDashboardPage() {
               )}
 
               {/* 8. OUTCOME GUARANTEE */}
-              {cmsSection === "guarantee" && (
-                <div style={{ display: "grid", gap: 14 }}>
+              {activeView === "cms-guarantee" && (
+                <div style={{ display: "grid", gap: 16 }}>
                   <div className="form-group">
                     <label className="form-label">Section Title</label>
                     <input
@@ -2023,8 +2390,8 @@ export default function AdminDashboardPage() {
                 </div>
               )}
 
-              {/* 9. FAQs SECTION */}
-              {cmsSection === "faq" && (
+              {/* 9. FAQs MANAGER */}
+              {activeView === "cms-faq" && (
                 <div style={{ display: "grid", gap: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>
@@ -2051,21 +2418,21 @@ export default function AdminDashboardPage() {
                         background: "#059669",
                         color: "#ffffff",
                         border: "none",
-                        padding: "6px 12px",
-                        borderRadius: 6,
+                        padding: "7px 14px",
+                        borderRadius: 8,
                         fontSize: "0.8rem",
                         fontWeight: 700,
                         cursor: "pointer",
                       }}
                     >
-                      <Plus size={14} /> Add FAQ
+                      <Plus size={14} /> Add New FAQ
                     </button>
                   </div>
 
                   {siteContent.faqSection.faqs.map((faq, idx) => (
                     <div
                       key={idx}
-                      style={{ padding: 14, border: "1px solid #e2e8f0", borderRadius: 10, background: "#f8fafc" }}
+                      style={{ padding: 16, border: "1px solid #e2e8f0", borderRadius: 12, background: "#f8fafc" }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                         <strong style={{ fontSize: "0.82rem" }}>FAQ #{idx + 1}</strong>
@@ -2128,13 +2495,13 @@ export default function AdminDashboardPage() {
                 </div>
               )}
 
-              {/* 10. CURRICULUM OVERVIEW TABLE */}
-              {cmsSection === "curriculum" && (
+              {/* 10. CURRICULUM TABLE */}
+              {activeView === "cms-curriculum" && (
                 <div style={{ display: "grid", gap: 16 }}>
                   {siteContent.curriculumSection.rows.map((row, idx) => (
                     <div
                       key={idx}
-                      style={{ padding: 14, border: "1px solid #e2e8f0", borderRadius: 10, background: "#f8fafc" }}
+                      style={{ padding: 16, border: "1px solid #e2e8f0", borderRadius: 12, background: "#f8fafc" }}
                     >
                       <div className="form-row-2col">
                         <div className="form-group">
@@ -2202,69 +2569,14 @@ export default function AdminDashboardPage() {
                 </div>
               )}
             </div>
-          </div>
-        )}
-
-        {/* TAB 4: QUICK PHONE LEADS */}
-        {activeTab === "leads" && (
-          <div style={{ background: "#ffffff", borderRadius: 12, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
-              <thead>
-                <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>
-                  <th style={{ padding: "14px 18px", color: "#64748b" }}>ID</th>
-                  <th style={{ padding: "14px 18px", color: "#64748b" }}>Phone Number</th>
-                  <th style={{ padding: "14px 18px", color: "#64748b" }}>Source</th>
-                  <th style={{ padding: "14px 18px", color: "#64748b" }}>Captured At</th>
-                  <th style={{ padding: "14px 18px", color: "#64748b", textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLeads.map((l) => (
-                  <tr key={l.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                    <td style={{ padding: "14px 18px", color: "#94a3b8", fontWeight: 700 }}>#{l.id}</td>
-                    <td style={{ padding: "14px 18px", fontWeight: 700 }}>
-                      {l.countryCode || ""} {l.phoneNumber}
-                    </td>
-                    <td style={{ padding: "14px 18px" }}>{l.source}</td>
-                    <td style={{ padding: "14px 18px", color: "#64748b" }}>
-                      {new Date(l.createdAt).toLocaleString()}
-                    </td>
-                    <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                      <a
-                        href={`https://wa.me/${cleanPhoneForWhatsApp(
-                          `${l.countryCode || "+234"}${l.phoneNumber}`
-                        )}?text=Hello%20from%20Bright%20Path%20Learning%20Hub!`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          background: "#25d366",
-                          color: "#ffffff",
-                          padding: "5px 12px",
-                          borderRadius: 6,
-                          fontSize: "0.76rem",
-                          fontWeight: 700,
-                          textDecoration: "none",
-                        }}
-                      >
-                        WhatsApp
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      </div>
 
       {/* CREDENTIAL GENERATOR MODAL */}
       {credModalOpen && (
         <div className="modal-backdrop" onClick={() => setCredModalOpen(false)}>
-          <div
-            className="modal-card"
-            style={{ maxWidth: 540 }}
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="modal-card" style={{ maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Key size={20} color="var(--bp-navy-800)" />
@@ -2315,7 +2627,8 @@ export default function AdminDashboardPage() {
                       <strong>Username:</strong> {generatedResult.account.username}
                     </div>
                     <div>
-                      <strong>Password:</strong> <span style={{ color: "#dc2626" }}>{generatedResult.account.password}</span>
+                      <strong>Password:</strong>{" "}
+                      <span style={{ color: "#dc2626" }}>{generatedResult.account.password}</span>
                     </div>
                     <div>
                       <strong>Portal URL:</strong> {generatedResult.portalUrl}
