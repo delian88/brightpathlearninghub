@@ -685,23 +685,23 @@ export default function StudentPortalPage() {
   const submittedHomework = submissions.filter((s) => s.status === "submitted");
   const gradedHomework = submissions.filter((s) => s.status === "graded");
 
-  const totalAssignedCount = assignments.length || 1;
+  const totalAssignedCount = assignments.length;
   const hwCompletionRate =
-    submissions.length > 0
+    totalAssignedCount > 0 && submissions.length > 0
       ? Math.min(100, Math.round((submissions.length / totalAssignedCount) * 100))
-      : 85;
+      : 0;
 
   const avgAssessmentScore =
     submissions.length > 0
       ? Math.round(
-          submissions.reduce((acc, s) => acc + (s.percentage || 85), 0) / submissions.length
+          submissions.reduce((acc, s) => acc + (s.percentage || 0), 0) / submissions.length
         )
-      : 88;
+      : 0;
 
-  const lessonsCompleted = progress?.lessonsCompleted ?? 14;
-  const readingProgress = progress?.readingProgress ?? 84;
-  const attendanceRate = progress?.attendanceRate ?? 96;
-  const learningHours = progress?.learningHours ?? 18.5;
+  const lessonsCompleted = progress?.lessonsCompleted ?? 0;
+  const readingProgress = progress?.readingProgress ?? 0;
+  const attendanceRate = progress?.attendanceRate ?? 100;
+  const learningHours = progress?.learningHours ?? 0;
   const badgesList = progress?.badges || [];
 
   // ============================================================================

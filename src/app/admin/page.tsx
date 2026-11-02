@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Calendar,
@@ -67,7 +68,53 @@ type ActiveView =
   | "cms-faq"
   | "cms-curriculum";
 
+const VIEW_TO_PATH: Record<ActiveView, string> = {
+  overview: "/admin",
+  bookings: "/admin/bookings",
+  credentials: "/admin/credentials",
+  leads: "/admin/leads",
+  "lms-homework": "/admin/homework",
+  "lms-progress": "/admin/progress",
+  "lms-reports": "/admin/reports",
+  "cms-general": "/admin/cms-general",
+  "cms-hero": "/admin/cms-hero",
+  "cms-benefits": "/admin/cms-benefits",
+  "cms-courses": "/admin/cms-courses",
+  "cms-why": "/admin/cms-why",
+  "cms-testimonials": "/admin/cms-testimonials",
+  "cms-stars": "/admin/cms-stars",
+  "cms-guarantee": "/admin/cms-guarantee",
+  "cms-faq": "/admin/cms-faq",
+  "cms-curriculum": "/admin/cms-curriculum",
+};
+
+const SLUG_TO_VIEW: Record<string, ActiveView> = {
+  overview: "overview",
+  bookings: "bookings",
+  credentials: "credentials",
+  leads: "leads",
+  homework: "lms-homework",
+  "lms-homework": "lms-homework",
+  progress: "lms-progress",
+  "lms-progress": "lms-progress",
+  reports: "lms-reports",
+  "lms-reports": "lms-reports",
+  "cms-general": "cms-general",
+  "cms-hero": "cms-hero",
+  "cms-benefits": "cms-benefits",
+  "cms-courses": "cms-courses",
+  "cms-why": "cms-why",
+  "cms-testimonials": "cms-testimonials",
+  "cms-stars": "cms-stars",
+  "cms-guarantee": "cms-guarantee",
+  "cms-faq": "cms-faq",
+  "cms-curriculum": "cms-curriculum",
+};
+
 export default function AdminDashboardPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authStep, setAuthStep] = useState<"credentials" | "otp">("credentials");
@@ -86,9 +133,29 @@ export default function AdminDashboardPage() {
   const [trustedDaysRemaining, setTrustedDaysRemaining] = useState(0);
 
   // Navigation & Sidebar State
-  const [activeView, setActiveView] = useState<ActiveView>("overview");
+  const initialSegment = pathname ? pathname.replace(/^\/admin\/?/, "").split("/")[0] : "";
+  const resolvedInitialView: ActiveView =
+    (initialSegment && SLUG_TO_VIEW[initialSegment]) || "overview";
+  const [activeView, setActiveView] = useState<ActiveView>(resolvedInitialView);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [bookingFilter, setBookingFilter] = useState<"all" | "confirmed" | "pending">("all");
+  const [preselectedStudent, setPreselectedStudent] = useState<{
+    username: string;
+    studentName: string;
+    courseName?: string;
+    grade?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (pathname) {
+      const segment = pathname.replace(/^\/admin\/?/, "").split("/")[0];
+      if (!segment) {
+        setActiveView("overview");
+      } else if (SLUG_TO_VIEW[segment]) {
+        setActiveView(SLUG_TO_VIEW[segment]);
+      }
+    }
+  }, [pathname]);
 
   // Dashboard Data State
   const [bookings, setBookings] = useState<any[]>([]);
@@ -966,6 +1033,21 @@ export default function AdminDashboardPage() {
   const switchView = (view: ActiveView) => {
     setActiveView(view);
     setSidebarOpen(false);
+    const targetPath = VIEW_TO_PATH[view] || "/admin";
+    if (pathname !== targetPath) {
+      router.push(targetPath);
+    }
+  };
+
+  const assignHomeworkToStudent = (stu: {
+    username: string;
+    studentName: string;
+    courseName?: string;
+    grade?: string;
+  }) => {
+    setPreselectedStudent(stu);
+    switchView("lms-homework");
+    showToast(`Assigning homework specifically to ${stu.studentName} (${stu.username})`, "info");
   };
 
   // ============================================================================
@@ -1657,7 +1739,7 @@ export default function AdminDashboardPage() {
                   ].map((sec) => (
                     <button
                       key={sec.id}
-                      onClick={() => setActiveView(sec.id as ActiveView)}
+                      onClick={() => switchView(sec.id as ActiveView)}
                       style={{
                         background: "#f8fafc",
                         border: "1px solid #e2e8f0",
@@ -1835,6 +1917,45 @@ export default function AdminDashboardPage() {
                           >
                             <Key size={15} />
                             <span>Generate Login Credentials</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              const cleanFirst = String(b.studentName || "STUDENT")
+                                .trim()
+                                .split(/\s+/)[0]
+                                .replace(/[^a-zA-Z0-9]/g, "")
+                                .toUpperCase();
+                              const matchedAcc = studentAccounts.find(
+                                (a) =>
+                                  a.studentName?.toLowerCase() ===
+                                  String(b.studentName || "").trim().toLowerCase()
+                              );
+                              assignHomeworkToStudent({
+                                username:
+                                  matchedAcc?.username ||
+                                  `BP-${cleanFirst}-${String(b.id || 100).padStart(4, "0")}`,
+                                studentName: b.studentName,
+                                courseName: b.courseName,
+                                grade: b.grade,
+                              });
+                            }}
+                            style={{
+                              background: "#4f46e5",
+                              color: "#ffffff",
+                              border: "none",
+                              padding: "8px 14px",
+                              borderRadius: 8,
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <FileText size={15} />
+                            <span>Assign Homework</span>
                           </button>
                         </div>
                       </div>
@@ -2045,6 +2166,34 @@ export default function AdminDashboardPage() {
                         >
                           <ExternalLink size={14} /> WhatsApp
                         </a>
+
+                        <button
+                          onClick={() =>
+                            assignHomeworkToStudent({
+                              username: acc.username,
+                              studentName: acc.studentName,
+                              courseName: acc.courseName,
+                              grade: acc.grade,
+                            })
+                          }
+                          style={{
+                            width: "100%",
+                            background: "#4f46e5",
+                            color: "#ffffff",
+                            border: "none",
+                            padding: "9px 12px",
+                            borderRadius: 8,
+                            fontSize: "0.8rem",
+                            fontWeight: 800,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <FileText size={14} /> Assign Homework to {acc.studentName}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -2134,6 +2283,8 @@ export default function AdminDashboardPage() {
               activeSection={activeView}
               lmsData={lmsData}
               studentAccounts={studentAccounts}
+              bookings={bookings}
+              preselectedStudent={preselectedStudent}
               onRefresh={() => fetchData(false)}
               showToast={showToast}
             />

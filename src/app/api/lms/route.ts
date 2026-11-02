@@ -55,13 +55,16 @@ export async function GET(request: Request) {
         if (hw.scheduledPublishDate && hw.scheduledPublishDate > todayIso) {
           return false;
         }
-        if (hw.targetType === "all" || hw.targetType === "group") return true;
-        if (
-          hw.targetType === "student" &&
-          hw.assignedStudentUsername?.toUpperCase() === studentUsername
-        ) {
-          return true;
+        if (hw.targetType === "student") {
+          const matchUsername =
+            Boolean(hw.assignedStudentUsername) &&
+            hw.assignedStudentUsername!.trim().toUpperCase() === studentUsername;
+          const matchName =
+            Boolean(hw.assignedStudentName) &&
+            hw.assignedStudentName!.trim().toLowerCase() === studentName.toLowerCase();
+          return matchUsername || matchName;
         }
+        if (hw.targetType === "all" || hw.targetType === "group") return true;
         if (
           hw.targetType === "course" &&
           courseName &&
@@ -69,7 +72,7 @@ export async function GET(request: Request) {
         ) {
           return true;
         }
-        return hw.targetType === "course";
+        return hw.targetType === "course" && !courseName;
       });
 
       const mySubmissions = lms.submissions.filter(
@@ -499,8 +502,8 @@ export async function POST(request: Request) {
 
       // Update student academic progress & badges
       const prog = getOrCreateStudentProgress(lms, cleanUser, newSubmission.studentName);
-      prog.lessonsCompleted = (prog.lessonsCompleted || 14) + 1;
-      prog.learningHours = Number(((prog.learningHours || 18.5) + 0.5).toFixed(1));
+      prog.lessonsCompleted = (prog.lessonsCompleted || 0) + 1;
+      prog.learningHours = Number(((prog.learningHours || 0) + 0.5).toFixed(1));
 
       if (weakSkillsIdentified.length > 0) {
         for (const skill of weakSkillsIdentified) {
@@ -714,9 +717,9 @@ export async function POST(request: Request) {
       lms.aiLogs.unshift(newLog);
 
       const prog = getOrCreateStudentProgress(lms, cleanUser, newLog.studentName);
-      prog.learningHours = Number(((prog.learningHours || 18.5) + 0.3).toFixed(1));
+      prog.learningHours = Number(((prog.learningHours || 0) + 0.3).toFixed(1));
       if (mode === "reading" || mode === "pronunciation") {
-        prog.readingProgress = Math.min(100, Math.max(prog.readingProgress || 80, Number(score)));
+        prog.readingProgress = Math.min(100, Math.max(prog.readingProgress || 0, Number(score)));
       }
       if (improvementArea && !prog.customImprovements.includes(improvementArea)) {
         prog.customImprovements.unshift(improvementArea);
@@ -770,8 +773,8 @@ export async function POST(request: Request) {
           );
         } else {
           prog.completedActivityIds.push(completedActivityId);
-          prog.lessonsCompleted = (prog.lessonsCompleted || 14) + 1;
-          prog.learningHours = Number(((prog.learningHours || 18.5) + 0.5).toFixed(1));
+          prog.lessonsCompleted = (prog.lessonsCompleted || 0) + 1;
+          prog.learningHours = Number(((prog.learningHours || 0) + 0.5).toFixed(1));
         }
       }
       if (lessonsCompleted !== undefined) prog.lessonsCompleted = Number(lessonsCompleted);

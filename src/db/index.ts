@@ -322,17 +322,27 @@ export async function getLmsData(): Promise<LmsStateData> {
         .where(eq(schema.siteSettings.key, "lms_portal_state"));
       if (rows && rows.length > 0 && rows[0].value) {
         const parsed = JSON.parse(rows[0].value);
+        const LEGACY_DEMO_HW_IDS = new Set([
+          "hw-phonics-1",
+          "hw-math-2",
+          "hw-phonics-master-101",
+          "hw-math-102",
+        ]);
+        const cleanAssignments = Array.isArray(parsed.assignments)
+          ? parsed.assignments.filter((a: any) => !LEGACY_DEMO_HW_IDS.has(a.id))
+          : [];
+        const cleanNotifications = Array.isArray(parsed.notifications)
+          ? parsed.notifications.filter((n: any) => n.id !== "notif-welcome-1")
+          : [];
         return {
           ...defaultLmsData,
           ...parsed,
-          assignments: parsed.assignments?.length ? parsed.assignments : defaultLmsData.assignments,
-          submissions: parsed.submissions || [],
-          reportCards: parsed.reportCards || [],
-          notifications: parsed.notifications?.length
-            ? parsed.notifications
-            : defaultLmsData.notifications,
+          assignments: cleanAssignments,
+          submissions: Array.isArray(parsed.submissions) ? parsed.submissions : [],
+          reportCards: Array.isArray(parsed.reportCards) ? parsed.reportCards : [],
+          notifications: cleanNotifications,
           progressRecords: parsed.progressRecords || {},
-          aiLogs: parsed.aiLogs || [],
+          aiLogs: Array.isArray(parsed.aiLogs) ? parsed.aiLogs : [],
         };
       }
     } catch (err) {

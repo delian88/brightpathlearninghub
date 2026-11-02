@@ -1,12 +1,15 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   Plus,
   Trash2,
   Download,
   Send,
   Bell,
+  UserCheck,
+  Users,
+  Save,
 } from "lucide-react";
 import {
   type LmsStateData,
@@ -24,6 +27,13 @@ interface AdminLmsManagerProps {
   activeSection: "lms-homework" | "lms-progress" | "lms-reports";
   lmsData: LmsStateData;
   studentAccounts: any[];
+  bookings?: any[];
+  preselectedStudent?: {
+    username: string;
+    studentName: string;
+    courseName?: string;
+    grade?: string;
+  } | null;
   onRefresh: () => void;
   showToast: (msg: string, type?: ToastType) => void;
 }
@@ -90,25 +100,103 @@ const QUESTION_TYPE_CATALOG: Array<{
   },
 ];
 
+const createEmptyQuestion = (subject = "General"): HomeworkQuestion => ({
+  id: `q-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+  type: "multiple-choice",
+  markingMethod: "automatic",
+  prompt: "",
+  options: ["", "", "", ""],
+  correctAnswer: "",
+  points: 20,
+  skillTag: subject,
+});
+
 export default function AdminLmsManager({
   activeSection,
   lmsData,
   studentAccounts,
+  bookings = [],
+  preselectedStudent = null,
   onRefresh,
   showToast,
 }: AdminLmsManagerProps) {
+  // Build a unified, deduplicated directory of real students from Student Accounts + Bookings
+  const allRealStudents = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        username: string;
+        studentName: string;
+        parentName: string;
+        email: string;
+        grade: string;
+        courseName: string;
+        source: "account" | "booking";
+      }
+    >();
+
+    for (const acc of studentAccounts) {
+      if (!acc?.username) continue;
+      const key = String(acc.username).trim().toUpperCase();
+      map.set(key, {
+        username: key,
+        studentName: acc.studentName || acc.username,
+        parentName: acc.parentName || "",
+        email: acc.email || "",
+        grade: acc.grade || "",
+        courseName: acc.courseName || "English Phonics & Reading",
+        source: "account",
+      });
+    }
+
+    for (const b of bookings) {
+      if (!b?.studentName) continue;
+      // Check if this booking student already has a student account by name/email
+      const alreadyExists = Array.from(map.values()).some(
+        (existing) =>
+          existing.studentName.toLowerCase() === String(b.studentName).trim().toLowerCase()
+      );
+      if (!alreadyExists) {
+        const cleanFirst = String(b.studentName)
+          .trim()
+          .split(/\s+/)[0]
+          .replace(/[^a-zA-Z0-9]/g, "")
+          .toUpperCase();
+        const syntheticUsername = `BP-${cleanFirst}-${String(b.id || 100).padStart(4, "0")}`;
+        map.set(syntheticUsername, {
+          username: syntheticUsername,
+          studentName: b.studentName,
+          parentName: b.parentName || "",
+          email: b.email || "",
+          grade: b.grade || "",
+          courseName: b.courseName || "English Phonics & Reading",
+          source: "booking",
+        });
+      }
+    }
+
+    return Array.from(map.values());
+  }, [studentAccounts, bookings]);
+
   // ==========================================================================
-  // 1. MODULE B: TEACHER HOMEWORK & ASSIGNMENT BUILDER STATE
+  // 1. MODULE B: TEACHER HOMEWORK & ASSIGNMENT BUILDER STATE (No hardcoded demo data)
   // ==========================================================================
   const [hwTitle, setHwTitle] = useState("");
   const [hwDescription, setHwDescription] = useState("");
   const [hwCourse, setHwCourse] = useState("English Phonics & Reading");
   const [hwSubject, setHwSubject] = useState("English Phonics & Reading");
-  const [hwTopic, setHwTopic] = useState("Phonics Blends, Comprehension & Handwriting");
+  const [hwTopic, setHwTopic] = useState("");
   const [hwGrade, setHwGrade] = useState("All Grades");
-  const [hwTargetType, setHwTargetType] = useState<"all" | "course" | "group" | "student">("all");
-  const [hwTargetGroupName, setHwTargetGroupName] = useState("Grade 1-3 Reading Group A");
-  const [hwStudentUsername, setHwStudentUsername] = useState("");
+  const [hwTargetType, setHwTargetType] = useState<"student" | "course" | "group" | "all">(
+    preselectedStudent ? "student" : "student"
+  );
+  const [hwTargetGroupName, setHwTargetGroupName] = useState("");
+  const [hwStudentUsername, setHwStudentUsername] = useState(
+    preselectedStudent?.username || ""
+  );
+  const [hwCustomStudentName, setHwCustomStudentName] = useState(
+    preselectedStudent?.studentName || ""
+  );
   const [hwPassingScore, setHwPassingScore] = useState(60);
   const [hwDueDate, setHwDueDate] = useState(
     new Date(Date.now() + 4 * 86400000).toISOString().split("T")[0]
@@ -118,57 +206,36 @@ export default function AdminLmsManager({
   const [hwAllowLate, setHwAllowLate] = useState(true);
   const [hwAllowResubmit, setHwAllowResubmit] = useState(true);
 
-  // Audio instructions & Attachments (PDF worksheets, images, learning materials)
-  const [hwAudioText, setHwAudioText] = useState(
-    "Hello Bright Scholar! Listen carefully to each question, complete the worksheet activities, and submit your answers online."
-  );
+  const [hwAudioText, setHwAudioText] = useState("");
   const [hwAudioUrl, setHwAudioUrl] = useState<string>("");
   const [isRecordingAudioInstr, setIsRecordingAudioInstr] = useState(false);
   const instrRecorderRef = useRef<MediaRecorder | null>(null);
   const instrChunksRef = useRef<Blob[]>([]);
 
   const [hwAttachments, setHwAttachments] = useState<HomeworkAttachment[]>([]);
-
   const [hwQuestions, setHwQuestions] = useState<HomeworkQuestion[]>([
-    {
-      id: "q-1",
-      type: "multiple-choice",
-      markingMethod: "automatic",
-      prompt: "Which word contains the long 'igh' vowel sound?",
-      options: ["Bright", "Brick", "Bring", "Brush"],
-      correctAnswer: "Bright",
-      points: 20,
-      skillTag: "Phonics Blends",
-    },
-    {
-      id: "q-2",
-      type: "fill-in-blank",
-      markingMethod: "automatic",
-      prompt: "Fill in the gap: The sun shines _____ in the morning sky.",
-      correctAnswer: "brightly",
-      acceptedAnswers: ["brightly", "bright", "warmly"],
-      points: 20,
-      skillTag: "Vocabulary & Context",
-    },
-    {
-      id: "q-3",
-      type: "handwriting",
-      markingMethod: "ai-teacher-review",
-      prompt: "Draw or write the sentence 'Reading makes me a confident leader' on the handwriting pad or upload a picture of your notebook.",
-      points: 30,
-      skillTag: "Handwriting Neatness",
-    },
-    {
-      id: "q-4",
-      type: "recorded-reading",
-      markingMethod: "ai-teacher-review",
-      prompt: "Record your voice reading the passage aloud with clear pronunciation.",
-      readingPassage: "Every morning, Zainab opens her favourite storybook and reads aloud with confidence and joy.",
-      points: 30,
-      skillTag: "Oral Reading Fluency",
-    },
+    createEmptyQuestion("English Phonics & Reading"),
   ]);
   const [creatingHw, setCreatingHw] = useState(false);
+
+  // Sync preselected student when navigating from Student Credentials / Bookings
+  useEffect(() => {
+    if (preselectedStudent?.username) {
+      setHwTargetType("student");
+      setHwStudentUsername(preselectedStudent.username);
+      setHwCustomStudentName(preselectedStudent.studentName || "");
+      if (preselectedStudent.courseName) {
+        setHwSubject(preselectedStudent.courseName);
+        setHwCourse(preselectedStudent.courseName);
+      }
+      if (preselectedStudent.grade) {
+        setHwGrade(preselectedStudent.grade);
+      }
+    } else if (!hwStudentUsername && allRealStudents.length > 0) {
+      setHwStudentUsername(allRealStudents[0].username);
+      setHwCustomStudentName(allRealStudents[0].studentName);
+    }
+  }, [preselectedStudent, allRealStudents, hwStudentUsername]);
 
   // ==========================================================================
   // 2. MODULE B: TEACHER GRADING, AI SUGGESTIONS & SCORE OVERRIDE STATE
@@ -184,61 +251,127 @@ export default function AdminLmsManager({
   const [savingGrade, setSavingGrade] = useState(false);
 
   // ==========================================================================
-  // 3. STUDENT ACADEMIC PROGRESS & ANNOUNCEMENTS STATE
+  // 3. STUDENT ACADEMIC PROGRESS EDITOR & ANNOUNCEMENTS STATE
   // ==========================================================================
-  const [selectedStudentUser, setSelectedStudentUser] = useState<string>(
-    studentAccounts[0]?.username || "BP-ZAINAB-1001"
-  );
+  const [selectedStudentUser, setSelectedStudentUser] = useState<string>("");
+  const [editLessonsCompleted, setEditLessonsCompleted] = useState<number>(0);
+  const [editReadingProgress, setEditReadingProgress] = useState<number>(0);
+  const [editAttendanceRate, setEditAttendanceRate] = useState<number>(100);
+  const [editLearningHours, setEditLearningHours] = useState<number>(0);
+  const [editStrengthsText, setEditStrengthsText] = useState<string>("");
+  const [editImprovementsText, setEditImprovementsText] = useState<string>("");
+  const [savingProgressProfile, setSavingProgressProfile] = useState(false);
+
+  const [announcementTarget, setAnnouncementTarget] = useState<string>("ALL");
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementMsg, setAnnouncementMsg] = useState("");
   const [sendingNotif, setSendingNotif] = useState(false);
 
   // ==========================================================================
-  // 4. REPORT CARD GENERATOR STATE
+  // 4. REPORT CARD GENERATOR STATE (Populated dynamically per student)
   // ==========================================================================
-  const [rcStudentUser, setRcStudentUser] = useState<string>(
-    studentAccounts[0]?.username || "BP-ZAINAB-1001"
-  );
-  const [rcTerm, setRcTerm] = useState("First Academic Term • 2026");
-  const [rcAttendance, setRcAttendance] = useState(96);
-  const [rcReadingProgress, setRcReadingProgress] = useState(90);
-  const [rcHomeworkRate, setRcHomeworkRate] = useState(95);
-  const [rcStrengths, setRcStrengths] = useState(
-    "Strong phonemic awareness and reading fluency\nActive participation in 1-on-1 live classes\nConsistent completion of homework assignments"
-  );
-  const [rcImprovements, setRcImprovements] = useState(
-    "Practising multi-syllable word pronunciation aloud\nExpanding descriptive vocabulary in paragraph writing"
-  );
-  const [rcComment, setRcComment] = useState(
-    "Has shown outstanding dedication during 1-on-1 live classes and interactive AI reading sessions. Keep up the wonderful momentum!"
-  );
-  const [rcSubjects, setRcSubjects] = useState([
-    {
-      subject: "English Phonics & Reading Fluency",
-      score: 92,
-      grade: "A+",
-      remark: "Reads passages with clarity and strong comprehension",
-    },
-    {
-      subject: "Word Pronunciation & Public Speaking",
-      score: 88,
-      grade: "A",
-      remark: "Confident articulation and expressive voice projection",
-    },
-    {
-      subject: "Creative Writing & Grammar",
-      score: 85,
-      grade: "A",
-      remark: "Well-structured sentences and proper punctuation",
-    },
-    {
-      subject: "Conceptual Math & Problem Solving",
-      score: 90,
-      grade: "A+",
-      remark: "Excellent logical reasoning and mental math accuracy",
-    },
-  ]);
+  const [rcStudentUser, setRcStudentUser] = useState<string>("");
+  const [rcTerm, setRcTerm] = useState("");
+  const [rcAttendance, setRcAttendance] = useState(100);
+  const [rcReadingProgress, setRcReadingProgress] = useState(0);
+  const [rcHomeworkRate, setRcHomeworkRate] = useState(0);
+  const [rcStrengths, setRcStrengths] = useState("");
+  const [rcImprovements, setRcImprovements] = useState("");
+  const [rcComment, setRcComment] = useState("");
+  const [rcSubjects, setRcSubjects] = useState<
+    Array<{ subject: string; score: number; grade: string; remark: string }>
+  >([{ subject: "", score: 0, grade: "", remark: "" }]);
   const [generatingRc, setGeneratingRc] = useState(false);
+
+  // Initialize selected student for Progress & Report Cards when real students load
+  useEffect(() => {
+    if (allRealStudents.length > 0) {
+      if (!selectedStudentUser) {
+        setSelectedStudentUser(allRealStudents[0].username);
+      }
+      if (!rcStudentUser) {
+        setRcStudentUser(allRealStudents[0].username);
+      }
+    }
+  }, [allRealStudents, selectedStudentUser, rcStudentUser]);
+
+  // Sync progress editor inputs when selectedStudentUser changes
+  useEffect(() => {
+    if (!selectedStudentUser) return;
+    const stu = allRealStudents.find(
+      (s) => s.username.toUpperCase() === selectedStudentUser.toUpperCase()
+    );
+    const prog = getOrCreateStudentProgress(
+      lmsData,
+      selectedStudentUser,
+      stu?.studentName || selectedStudentUser
+    );
+    setEditLessonsCompleted(prog.lessonsCompleted || 0);
+    setEditReadingProgress(prog.readingProgress || 0);
+    setEditAttendanceRate(prog.attendanceRate ?? 100);
+    setEditLearningHours(prog.learningHours || 0);
+    setEditStrengthsText((prog.customStrengths || []).join("\n"));
+    setEditImprovementsText((prog.customImprovements || []).join("\n"));
+  }, [selectedStudentUser, lmsData, allRealStudents]);
+
+  // Sync Report Card inputs from the student's actual progress & submissions when rcStudentUser changes
+  useEffect(() => {
+    if (!rcStudentUser) return;
+    const stu = allRealStudents.find(
+      (s) => s.username.toUpperCase() === rcStudentUser.toUpperCase()
+    );
+    const prog = getOrCreateStudentProgress(
+      lmsData,
+      rcStudentUser,
+      stu?.studentName || rcStudentUser
+    );
+    const studentSubs = lmsData.submissions.filter(
+      (s) => s.studentUsername.toUpperCase() === rcStudentUser.toUpperCase()
+    );
+
+    const assignedToStudent = lmsData.assignments.filter(
+      (a) =>
+        a.targetType === "all" ||
+        (a.targetType === "student" &&
+          a.assignedStudentUsername?.toUpperCase() === rcStudentUser.toUpperCase()) ||
+        (a.targetType === "course" && a.courseName === stu?.courseName)
+    );
+
+    const computedHwRate =
+      assignedToStudent.length > 0
+        ? Math.min(100, Math.round((studentSubs.length / assignedToStudent.length) * 100))
+        : studentSubs.length > 0
+        ? 100
+        : 0;
+
+    setRcAttendance(prog.attendanceRate ?? 100);
+    setRcReadingProgress(prog.readingProgress || 0);
+    setRcHomeworkRate(computedHwRate);
+    setRcStrengths((prog.customStrengths || []).join("\n"));
+    setRcImprovements((prog.customImprovements || []).join("\n"));
+
+    if (studentSubs.length > 0) {
+      const bySubject = studentSubs.map((s) => {
+        const sc = s.percentage || 0;
+        return {
+          subject: s.subject || s.courseName || s.homeworkTitle,
+          score: sc,
+          grade: sc >= 90 ? "A+" : sc >= 80 ? "A" : sc >= 70 ? "B+" : sc >= 60 ? "B" : "C",
+          remark: s.teacherFeedback || "",
+        };
+      });
+      setRcSubjects(bySubject);
+    } else if (stu?.courseName) {
+      setRcSubjects([
+        {
+          subject: stu.courseName,
+          score: 0,
+          grade: "",
+          remark: "",
+        },
+      ]);
+    }
+  }, [rcStudentUser, lmsData, allRealStudents]);
 
   // ==========================================================================
   // HELPER FUNCTIONS FOR MODULE B HOMEWORK BUILDER
@@ -257,24 +390,23 @@ export default function AdminLmsManager({
     };
 
     if (qType === "multiple-choice") {
-      baseQuestion.options = ["Option A", "Option B", "Option C", "Option D"];
-      baseQuestion.correctAnswer = "Option A";
+      baseQuestion.options = ["", "", "", ""];
+      baseQuestion.correctAnswer = "";
     } else if (qType === "true-false") {
       baseQuestion.options = ["True", "False"];
       baseQuestion.correctAnswer = "True";
     } else if (qType === "matching") {
       baseQuestion.matchingPairs = [
-        { left: " Word 1", right: "Meaning A" },
-        { left: "Word 2", right: "Meaning B" },
+        { left: "", right: "" },
+        { left: "", right: "" },
       ];
     } else if (qType === "fill-in-blank") {
       baseQuestion.correctAnswer = "";
       baseQuestion.acceptedAnswers = [];
     } else if (qType === "spelling") {
-      baseQuestion.correctAnswer = "Confidence";
+      baseQuestion.correctAnswer = "";
     } else if (qType === "reading-comprehension" || qType === "recorded-reading") {
-      baseQuestion.readingPassage =
-        "Enter the short reading passage here for the student to read and respond to.";
+      baseQuestion.readingPassage = "";
       baseQuestion.acceptedAnswers = [];
     }
 
@@ -344,17 +476,34 @@ export default function AdminLmsManager({
       instrRecorderRef.current = recorder;
       setIsRecordingAudioInstr(true);
     } catch {
-      showToast("Microphone access unavailable. Students can still use the Text-to-Speech voice reader!", "warning");
+      showToast(
+        "Microphone access unavailable. Students can still use the Text-to-Speech voice reader!",
+        "warning"
+      );
     }
   };
 
   const handleCreateHomework = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (hwTargetType === "student" && !hwStudentUsername.trim() && !hwCustomStudentName.trim()) {
+      showToast("Please select or enter the specific student to assign this homework to.", "warning");
+      return;
+    }
+
     setCreatingHw(true);
     try {
-      const targetStudent = studentAccounts.find(
-        (s) => s.username?.toUpperCase() === hwStudentUsername.toUpperCase()
+      const targetStudent = allRealStudents.find(
+        (s) => s.username.toUpperCase() === hwStudentUsername.trim().toUpperCase()
       );
+      const resolvedUsername =
+        hwTargetType === "student"
+          ? (hwStudentUsername.trim() || `BP-${hwCustomStudentName.trim().split(/\s+/)[0]?.toUpperCase() || "STUDENT"}`).toUpperCase()
+          : undefined;
+      const resolvedStudentName =
+        hwTargetType === "student"
+          ? targetStudent?.studentName || hwCustomStudentName.trim() || resolvedUsername
+          : undefined;
+
       const res = await fetch("/api/lms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -368,8 +517,8 @@ export default function AdminLmsManager({
           grade: hwGrade,
           targetType: hwTargetType,
           targetGroupName: hwTargetType === "group" ? hwTargetGroupName : undefined,
-          assignedStudentUsername: hwTargetType === "student" ? hwStudentUsername : undefined,
-          assignedStudentName: targetStudent?.studentName,
+          assignedStudentUsername: resolvedUsername,
+          assignedStudentName: resolvedStudentName,
           audioInstructionText: hwAudioText,
           audioInstructionUrl: hwAudioUrl || undefined,
           attachments: hwAttachments,
@@ -384,10 +533,19 @@ export default function AdminLmsManager({
       });
       const data = await res.json();
       if (data.success) {
-        showToast(data.message || "Homework saved!", "success");
+        showToast(
+          hwTargetType === "student"
+            ? `Homework assigned specifically to ${resolvedStudentName} (${resolvedUsername})!`
+            : data.message || "Homework saved!",
+          "success"
+        );
         setHwTitle("");
         setHwDescription("");
+        setHwTopic("");
+        setHwAudioText("");
+        setHwAudioUrl("");
         setHwAttachments([]);
+        setHwQuestions([createEmptyQuestion(hwSubject)]);
         onRefresh();
       } else {
         showToast(data.message || "Could not create homework.", "error");
@@ -488,6 +646,52 @@ export default function AdminLmsManager({
     }
   };
 
+  const handleSaveStudentProgressProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentUser) {
+      showToast("Please select a student first.", "warning");
+      return;
+    }
+    setSavingProgressProfile(true);
+    try {
+      const stu = allRealStudents.find(
+        (s) => s.username.toUpperCase() === selectedStudentUser.toUpperCase()
+      );
+      const res = await fetch("/api/lms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-student-profile",
+          studentUsername: selectedStudentUser,
+          studentName: stu?.studentName || selectedStudentUser,
+          lessonsCompleted: editLessonsCompleted,
+          readingProgress: editReadingProgress,
+          attendanceRate: editAttendanceRate,
+          learningHours: editLearningHours,
+          customStrengths: editStrengthsText
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          customImprovements: editImprovementsText
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Academic progress saved for ${stu?.studentName || selectedStudentUser}!`, "success");
+        onRefresh();
+      } else {
+        showToast(data.message || "Could not update progress.", "error");
+      }
+    } catch {
+      showToast("Error updating student progress.", "error");
+    } finally {
+      setSavingProgressProfile(false);
+    }
+  };
+
   const handlePostAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
     setSendingNotif(true);
@@ -497,7 +701,7 @@ export default function AdminLmsManager({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "post-announcement",
-          targetStudentUsername: "ALL",
+          targetStudentUsername: announcementTarget || "ALL",
           type: "announcement",
           title: announcementTitle,
           message: announcementMsg,
@@ -505,7 +709,7 @@ export default function AdminLmsManager({
       });
       const data = await res.json();
       if (data.success) {
-        showToast("Announcement sent to all students & parents!", "success");
+        showToast("Notification sent to student portal!", "success");
         setAnnouncementTitle("");
         setAnnouncementMsg("");
         onRefresh();
@@ -519,35 +723,38 @@ export default function AdminLmsManager({
 
   const handleGenerateReportCard = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!rcStudentUser) {
+      showToast("Please select a student account to issue a report card.", "warning");
+      return;
+    }
+    const validSubjects = rcSubjects.filter((s) => s.subject.trim() !== "");
+    if (validSubjects.length === 0) {
+      showToast("Please add at least one subject evaluation.", "warning");
+      return;
+    }
+
     setGeneratingRc(true);
     try {
-      const matchedAcc = studentAccounts.find(
-        (s) => s.username?.toUpperCase() === rcStudentUser.toUpperCase()
-      ) || {
-        username: rcStudentUser || "BP-ZAINAB-1001",
-        studentName: "Zainab Bello",
-        parentName: "Amina Bello",
-        email: "amina.bello@example.com",
-        grade: "Grade 2",
-        courseName: "English Phonics & Reading",
-      };
+      const matchedAcc = allRealStudents.find(
+        (s) => s.username.toUpperCase() === rcStudentUser.toUpperCase()
+      );
 
       const res = await fetch("/api/lms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "generate-report-card",
-          studentUsername: matchedAcc.username,
-          studentName: matchedAcc.studentName,
-          parentName: matchedAcc.parentName,
-          parentEmail: matchedAcc.email,
-          grade: matchedAcc.grade,
-          courseName: matchedAcc.courseName,
-          termPeriod: rcTerm,
+          studentUsername: matchedAcc?.username || rcStudentUser,
+          studentName: matchedAcc?.studentName || rcStudentUser,
+          parentName: matchedAcc?.parentName || "Parent / Guardian",
+          parentEmail: matchedAcc?.email || "",
+          grade: matchedAcc?.grade || "All Grades",
+          courseName: matchedAcc?.courseName || "English Phonics & Reading",
+          termPeriod: rcTerm || `Academic Term • ${new Date().getFullYear()}`,
           attendanceRate: rcAttendance,
           readingProgress: rcReadingProgress,
           homeworkCompletionRate: rcHomeworkRate,
-          subjectScores: rcSubjects,
+          subjectScores: validSubjects,
           strengths: rcStrengths
             .split("\n")
             .map((s) => s.trim())
@@ -575,7 +782,7 @@ export default function AdminLmsManager({
   };
 
   // ==========================================================================
-  // SECTION 1: MODULE B — HOMEWORK & ASSIGNMENT MANAGEMENT
+  // SECTION 1: MODULE B — HOMEWORK & ASSIGNMENT MANAGEMENT (/admin/homework)
   // ==========================================================================
   if (activeSection === "lms-homework") {
     const totalBuilderMarks = hwQuestions.reduce((acc, q) => acc + Number(q.points || 0), 0);
@@ -604,7 +811,7 @@ export default function AdminLmsManager({
         >
           <div>
             <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#93c5fd", textTransform: "uppercase" }}>
-              Module B • Homework & Assignment Lifecycle Management
+              Dedicated Page • /admin/homework
             </div>
             <div style={{ fontSize: "1.15rem", fontWeight: 900, marginTop: 2 }}>
               Draft → Published → In Progress → Submitted → Under Review → Graded → Returned
@@ -612,23 +819,23 @@ export default function AdminLmsManager({
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: "0.75rem", fontWeight: 800 }}>
             <span style={{ background: "rgba(255,255,255,0.12)", padding: "5px 10px", borderRadius: 999 }}>
-              ⚡ Auto-Mark: MC, True/False, Matching, Fill-Blanks, Spelling
+              Active Assignments: {lmsData.assignments.length}
             </span>
             <span style={{ background: "rgba(16,185,129,0.22)", color: "#a7f3d0", padding: "5px 10px", borderRadius: 999 }}>
-              🤖/👩‍🏫 AI + Teacher Override: Comprehension, Handwriting, Essays, Voice Reading
+              Student Submissions: {lmsData.submissions.length}
             </span>
           </div>
         </div>
 
         {/* Create & Assign Homework Form */}
         <div className="admin-panel-card" style={{ padding: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
             <div>
               <h2 style={{ margin: "0 0 4px", fontSize: "1.18rem", fontWeight: 800 }}>
-                📝 Create, Schedule & Assign Homework
+                📝 Create & Assign Homework (Specific Student or Class)
               </h2>
               <p style={{ margin: 0, fontSize: "0.84rem", color: "#64748b" }}>
-                Assign to an individual student, class, or group. Attach PDF worksheets, images, audio instructions, and 9 interactive question types.
+                Choose whether to assign to a specific student or a class, add instructions/worksheets, and build your questions.
               </p>
             </div>
             <div style={{ background: "#eff6ff", color: "#1d4ed8", padding: "6px 14px", borderRadius: 999, fontWeight: 800, fontSize: "0.82rem" }}>
@@ -637,14 +844,168 @@ export default function AdminLmsManager({
           </div>
 
           <form onSubmit={handleCreateHomework}>
-            {/* Row 1: Title, Subject, Topic */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 14 }}>
+            {/* STEP 1: Prominent Target Selector (Specific Student vs Class/Group/All) */}
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "2px solid #e2e8f0",
+                borderRadius: 14,
+                padding: 16,
+                marginBottom: 18,
+              }}
+            >
+              <label className="form-label" style={{ marginBottom: 10, display: "block", fontSize: "0.85rem" }}>
+                1. Who do you want to assign this homework to?
+              </label>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(195px, 1fr))",
+                  gap: 10,
+                  marginBottom: 14,
+                }}
+              >
+                {[
+                  {
+                    id: "student",
+                    title: "👤 Specific Student",
+                    desc: "Assign to 1 individual child",
+                  },
+                  {
+                    id: "course",
+                    title: "🏫 Entire Course Class",
+                    desc: `All students in ${hwSubject}`,
+                  },
+                  {
+                    id: "group",
+                    title: "👥 Specific Study Group",
+                    desc: "Assign to a custom group",
+                  },
+                  {
+                    id: "all",
+                    title: "🌍 All Enrolled Students",
+                    desc: "Assign across entire hub",
+                  },
+                ].map((opt) => {
+                  const active = hwTargetType === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setHwTargetType(opt.id as any)}
+                      style={{
+                        textAlign: "left",
+                        padding: "12px 14px",
+                        borderRadius: 12,
+                        border: active ? "2px solid #4f46e5" : "1px solid #cbd5e1",
+                        background: active ? "#eef2ff" : "#ffffff",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ fontWeight: 900, fontSize: "0.88rem", color: active ? "#312e81" : "#0f172a" }}>
+                        {opt.title}
+                      </div>
+                      <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: 2 }}>
+                        {opt.desc}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Specific Student Picker */}
+              {hwTargetType === "student" && (
+                <div
+                  style={{
+                    background: "#ffffff",
+                    border: "1px solid #c7d2fe",
+                    borderRadius: 12,
+                    padding: 14,
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">
+                      Select Registered Student ({allRealStudents.length} available)
+                    </label>
+                    <select
+                      className="form-select"
+                      value={hwStudentUsername}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setHwStudentUsername(val);
+                        const found = allRealStudents.find((s) => s.username === val);
+                        if (found) {
+                          setHwCustomStudentName(found.studentName);
+                          if (found.courseName) {
+                            setHwSubject(found.courseName);
+                            setHwCourse(found.courseName);
+                          }
+                          if (found.grade) setHwGrade(found.grade);
+                        }
+                      }}
+                    >
+                      <option value="">-- Choose a Student from Portal / Bookings --</option>
+                      {allRealStudents.map((s) => (
+                        <option key={s.username} value={s.username}>
+                          {s.studentName} ({s.username} • {s.grade || "Student"} • {s.courseName})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Student Username / Portal ID</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. BP-CHIDUBEM-4821"
+                      value={hwStudentUsername}
+                      onChange={(e) => setHwStudentUsername(e.target.value.toUpperCase())}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Student Full Name</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Enter student's name"
+                      value={hwCustomStudentName}
+                      onChange={(e) => setHwCustomStudentName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {hwTargetType === "group" && (
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Enter Study Group Name</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={hwTargetGroupName}
+                    onChange={(e) => setHwTargetGroupName(e.target.value)}
+                    placeholder="e.g. Grade 2 Phonics Group A"
+                    required
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Row 1: Title, Subject, Topic, Grade */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 14 }}>
               <div className="form-group">
                 <label className="form-label">Homework Title</label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Week 5 Phonics, Comprehension & Voice Reading"
+                  placeholder="Enter homework title..."
                   value={hwTitle}
                   onChange={(e) => setHwTitle(e.target.value)}
                   required
@@ -670,84 +1031,30 @@ export default function AdminLmsManager({
               </div>
 
               <div className="form-group">
-                <label className="form-label">Specific Topic</label>
+                <label className="form-label">Topic</label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Long Vowel Blends & Story Writing"
+                  placeholder="Enter lesson topic..."
                   value={hwTopic}
                   onChange={(e) => setHwTopic(e.target.value)}
                   required
                 />
               </div>
-            </div>
-
-            {/* Row 2: Target Audience, Student/Group selector, Grade */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 14 }}>
-              <div className="form-group">
-                <label className="form-label">Assign To</label>
-                <select
-                  className="form-select"
-                  value={hwTargetType}
-                  onChange={(e) => setHwTargetType(e.target.value as any)}
-                >
-                  <option value="all">Entire School / All Students</option>
-                  <option value="course">Entire Class ({hwSubject})</option>
-                  <option value="group">Specific Study Group</option>
-                  <option value="student">Individual Student Only</option>
-                </select>
-              </div>
-
-              {hwTargetType === "student" && (
-                <div className="form-group">
-                  <label className="form-label">Select Individual Student</label>
-                  <select
-                    className="form-select"
-                    value={hwStudentUsername}
-                    onChange={(e) => setHwStudentUsername(e.target.value)}
-                    required
-                  >
-                    <option value="">-- Choose Student --</option>
-                    <option value="BP-ZAINAB-1001">Zainab Bello (BP-ZAINAB-1001 • Grade 2)</option>
-                    {studentAccounts.map((s) => (
-                      <option key={s.id} value={s.username}>
-                        {s.studentName} ({s.username} • {s.grade})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {hwTargetType === "group" && (
-                <div className="form-group">
-                  <label className="form-label">Class / Group Name</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={hwTargetGroupName}
-                    onChange={(e) => setHwTargetGroupName(e.target.value)}
-                    placeholder="e.g. Grade 2 Advanced Readers"
-                  />
-                </div>
-              )}
 
               <div className="form-group">
                 <label className="form-label">Grade Level</label>
-                <select
-                  className="form-select"
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. Grade 2 or All Grades"
                   value={hwGrade}
                   onChange={(e) => setHwGrade(e.target.value)}
-                >
-                  <option value="All Grades">All Grades (LKG – Grade 8)</option>
-                  <option value="LKG / UKG">LKG / UKG</option>
-                  <option value="Grade 1 - 2">Grade 1 – Grade 2</option>
-                  <option value="Grade 3 - 5">Grade 3 – Grade 5</option>
-                  <option value="Grade 6 - 8">Grade 6 – Grade 8</option>
-                </select>
+                />
               </div>
             </div>
 
-            {/* Row 3: Deadline, Scheduled Publish Date, Passing Score %, Lifecycle Status */}
+            {/* Row 2: Deadline, Scheduled Publish Date, Passing Score %, Lifecycle Status */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 14 }}>
               <div className="form-group">
                 <label className="form-label">Submission Deadline</label>
@@ -789,7 +1096,7 @@ export default function AdminLmsManager({
                   value={hwStatus}
                   onChange={(e) => setHwStatus(e.target.value as "Published" | "Draft")}
                 >
-                  <option value="Published">🟢 Published (Visible to Students)</option>
+                  <option value="Published">🟢 Published (Visible to Student)</option>
                   <option value="Draft">📝 Save as Draft (Hidden until Published)</option>
                 </select>
               </div>
@@ -802,7 +1109,7 @@ export default function AdminLmsManager({
                 <textarea
                   rows={2}
                   className="form-input"
-                  placeholder="Write step-by-step instructions for students and parents..."
+                  placeholder="Write step-by-step instructions for the student..."
                   value={hwDescription}
                   onChange={(e) => setHwDescription(e.target.value)}
                 />
@@ -813,7 +1120,7 @@ export default function AdminLmsManager({
                 <textarea
                   rows={2}
                   className="form-input"
-                  placeholder="Text that the student's 'Listen to Instructions' button will read aloud..."
+                  placeholder="Optional text to read aloud when the student clicks 'Listen to Instructions'..."
                   value={hwAudioText}
                   onChange={(e) => setHwAudioText(e.target.value)}
                 />
@@ -893,7 +1200,7 @@ export default function AdminLmsManager({
                     cursor: "pointer",
                   }}
                 >
-                  🖼️ + Upload Image / Diagram
+                  🖼️ + Upload Image / Material
                   <input
                     type="file"
                     accept="image/*"
@@ -914,7 +1221,7 @@ export default function AdminLmsManager({
                       fontWeight: 800,
                     }}
                   >
-                    {att.type.toUpperCase()}: {att.title}{" "}
+                    {att.type.toUpperCase()}: {att.title || att.name}{" "}
                     <button
                       type="button"
                       onClick={() =>
@@ -1045,12 +1352,12 @@ export default function AdminLmsManager({
                                 updated[idx].options = ["True", "False"];
                                 updated[idx].correctAnswer = "True";
                               } else if (nextType === "multiple-choice" && !updated[idx].options) {
-                                updated[idx].options = ["Option A", "Option B", "Option C", "Option D"];
-                                updated[idx].correctAnswer = "Option A";
+                                updated[idx].options = ["", "", "", ""];
+                                updated[idx].correctAnswer = "";
                               } else if (nextType === "matching" && !updated[idx].matchingPairs) {
                                 updated[idx].matchingPairs = [
-                                  { left: "Item 1", right: "Match A" },
-                                  { left: "Item 2", right: "Match B" },
+                                  { left: "", right: "" },
+                                  { left: "", right: "" },
                                 ];
                               }
                               setHwQuestions(updated);
@@ -1179,6 +1486,7 @@ export default function AdminLmsManager({
                             <input
                               type="text"
                               className="form-input"
+                              placeholder="Enter the exact option that is correct"
                               value={q.correctAnswer || ""}
                               onChange={(e) => {
                                 const updated = [...hwQuestions];
@@ -1310,7 +1618,7 @@ export default function AdminLmsManager({
                             {q.type === "spelling"
                               ? "Target Spelling Word (Automatic Exact Match):"
                               : q.type === "fill-in-blank"
-                              ? "Accepted Answers (Comma-separated rules, e.g. brightly, bright, warmly):"
+                              ? "Accepted Answers (Comma-separated rules):"
                               : "Optional Key Concepts / Keywords for AI-Assisted Comprehension Check (Comma-separated):"}
                           </label>
                           <input
@@ -1338,8 +1646,8 @@ export default function AdminLmsManager({
                             }}
                             placeholder={
                               q.type === "spelling"
-                                ? "e.g. Magnificent"
-                                : "e.g. brightly, bright, shining"
+                                ? "Enter the word to spell"
+                                : "Enter accepted answer(s), separated by commas"
                             }
                             style={{ background: "#ecfdf5", borderColor: "#10b981", marginTop: 4 }}
                           />
@@ -1363,6 +1671,8 @@ export default function AdminLmsManager({
                   ? "Saving Assignment..."
                   : hwStatus === "Draft"
                   ? "Save Homework as Draft"
+                  : hwTargetType === "student"
+                  ? `Publish & Assign to ${hwCustomStudentName || hwStudentUsername || "Selected Student"}`
                   : "Publish & Assign Homework"}
               </span>
             </button>
@@ -1388,7 +1698,7 @@ export default function AdminLmsManager({
                 ✅ Student Submissions — Automatic, AI-Assisted & Teacher Override Grading ({lmsData.submissions.length})
               </h2>
               <p style={{ margin: 0, fontSize: "0.84rem", color: "#64748b" }}>
-                Teachers can inspect student work (including handwriting drawings, uploaded photos & voice recordings) and override any AI-generated or automatic score.
+                Inspect student work (including handwriting drawings, uploaded photos & voice recordings) and override any AI-generated or automatic score.
               </p>
             </div>
 
@@ -1505,7 +1815,6 @@ export default function AdminLmsManager({
                             </div>
                           )}
 
-                          {/* Show Canvas Handwriting or Uploaded Photo if present */}
                           {(rich?.drawingDataUrl || rich?.uploadedImageUrl) && (
                             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
                               {rich.drawingDataUrl && (
@@ -1543,7 +1852,6 @@ export default function AdminLmsManager({
                             </div>
                           )}
 
-                          {/* Show Voice Recording Player if present */}
                           {rich?.voiceRecordingUrl && (
                             <div style={{ marginTop: 8 }}>
                               <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#ea580c" }}>
@@ -1671,7 +1979,7 @@ export default function AdminLmsManager({
 
           {filteredSubmissions.length === 0 ? (
             <div style={{ padding: 24, textAlign: "center", color: "#64748b", background: "#f8fafc", borderRadius: 12 }}>
-              No homework submissions match this status filter yet.
+              No homework submissions yet.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1786,208 +2094,249 @@ export default function AdminLmsManager({
         {/* Active & Draft Homework List */}
         <div className="admin-panel-card" style={{ padding: 24 }}>
           <h3 style={{ margin: "0 0 14px", fontSize: "1.05rem", fontWeight: 800 }}>
-            📚 All Created Homework Assignments — Published, Scheduled & Drafts ({lmsData.assignments.length})
+            📚 Created Homework Assignments ({lmsData.assignments.length})
           </h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {lmsData.assignments.map((hw) => {
-              const isDraft = hw.assignmentStatus === "Draft";
-              return (
-                <div
-                  key={hw.id}
-                  style={{
-                    padding: "12px 16px",
-                    borderRadius: 12,
-                    border: "1px solid #e2e8f0",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: 10,
-                  }}
-                >
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 800, fontSize: "0.92rem" }}>{hw.title}</span>
-                      <span
-                        style={{
-                          background: isDraft ? "#fef3c7" : "#dcfce7",
-                          color: isDraft ? "#b45309" : "#15803d",
-                          padding: "2px 9px",
-                          borderRadius: 999,
-                          fontSize: "0.7rem",
-                          fontWeight: 800,
-                        }}
-                      >
-                        {isDraft ? "📝 Draft" : "🟢 Published"}
-                      </span>
-                      {hw.scheduledPublishDate && (
+          {lmsData.assignments.length === 0 ? (
+            <div style={{ padding: 20, textAlign: "center", color: "#64748b", background: "#f8fafc", borderRadius: 12 }}>
+              No homework assignments created yet. Use the form above to assign homework to a specific student or class.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {lmsData.assignments.map((hw) => {
+                const isDraft = hw.assignmentStatus === "Draft";
+                return (
+                  <div
+                    key={hw.id}
+                    style={{
+                      padding: "12px 16px",
+                      borderRadius: 12,
+                      border: "1px solid #e2e8f0",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 800, fontSize: "0.92rem" }}>{hw.title}</span>
                         <span
                           style={{
-                            background: "#e0f2fe",
-                            color: "#0369a1",
+                            background: isDraft ? "#fef3c7" : "#dcfce7",
+                            color: isDraft ? "#b45309" : "#15803d",
                             padding: "2px 9px",
                             borderRadius: 999,
                             fontSize: "0.7rem",
                             fontWeight: 800,
                           }}
                         >
-                          🗓️ Scheduled: {hw.scheduledPublishDate}
+                          {isDraft ? "📝 Draft" : "🟢 Published"}
                         </span>
-                      )}
+                        <span
+                          style={{
+                            background: hw.targetType === "student" ? "#eef2ff" : "#f1f5f9",
+                            color: hw.targetType === "student" ? "#4338ca" : "#334155",
+                            padding: "2px 9px",
+                            borderRadius: 999,
+                            fontSize: "0.72rem",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {hw.targetType === "student"
+                            ? `👤 Assigned to: ${hw.assignedStudentName || hw.assignedStudentUsername}`
+                            : hw.targetType === "group"
+                            ? `👥 Group: ${hw.targetGroupName}`
+                            : hw.targetType === "course"
+                            ? `🏫 Class: ${hw.courseName}`
+                            : "🌍 All Students"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: 3 }}>
+                        Subject: {hw.subject || hw.courseName} {hw.topic ? `(${hw.topic})` : ""} •{" "}
+                        {hw.questions.length} questions ({hw.totalPoints} pts • Pass: {hw.passingScore || 60}%) • Due:{" "}
+                        {hw.dueDate}
+                      </div>
                     </div>
-                    <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: 3 }}>
-                      Subject: {hw.subject || hw.courseName} {hw.topic ? `(${hw.topic})` : ""} • Target:{" "}
-                      {hw.targetType.toUpperCase()}{" "}
-                      {hw.assignedStudentUsername ? `(${hw.assignedStudentUsername})` : ""} •{" "}
-                      {hw.questions.length} questions ({hw.totalPoints} pts • Pass: {hw.passingScore || 60}%) • Due:{" "}
-                      {hw.dueDate}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleHomeworkStatus(hw.id, hw.assignmentStatus)}
+                        style={{
+                          background: isDraft ? "#ecfdf5" : "#f8fafc",
+                          color: isDraft ? "#059669" : "#475569",
+                          border: "1px solid #cbd5e1",
+                          padding: "6px 12px",
+                          borderRadius: 8,
+                          fontSize: "0.76rem",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {isDraft ? "🚀 Publish Now" : "Switch to Draft"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteHomework(hw.id)}
+                        style={{
+                          background: "#fef2f2",
+                          color: "#dc2626",
+                          border: "1px solid #fecaca",
+                          padding: "6px 10px",
+                          borderRadius: 8,
+                          fontSize: "0.76rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleHomeworkStatus(hw.id, hw.assignmentStatus)}
-                      style={{
-                        background: isDraft ? "#ecfdf5" : "#f8fafc",
-                        color: isDraft ? "#059669" : "#475569",
-                        border: "1px solid #cbd5e1",
-                        padding: "6px 12px",
-                        borderRadius: 8,
-                        fontSize: "0.76rem",
-                        fontWeight: 800,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {isDraft ? "🚀 Publish Now" : "Switch to Draft"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteHomework(hw.id)}
-                      style={{
-                        background: "#fef2f2",
-                        color: "#dc2626",
-                        border: "1px solid #fecaca",
-                        padding: "6px 10px",
-                        borderRadius: 8,
-                        fontSize: "0.76rem",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   // ==========================================================================
-  // SECTION 2: ACADEMIC PROGRESS TRACKER, AI LOGS & ANNOUNCEMENTS
+  // SECTION 2: ACADEMIC PROGRESS TRACKER, AI LOGS & ANNOUNCEMENTS (/admin/progress)
   // ==========================================================================
   if (activeSection === "lms-progress") {
-    const selectedProg = getOrCreateStudentProgress(
-      lmsData,
-      selectedStudentUser,
-      studentAccounts.find((s) => s.username === selectedStudentUser)?.studentName || "Zainab Bello"
-    );
-
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div className="admin-panel-card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
             <div>
-              <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800 }}>
+              <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#4f46e5", textTransform: "uppercase" }}>
+                Dedicated Page • /admin/progress
+              </span>
+              <h2 style={{ margin: "2px 0 0", fontSize: "1.15rem", fontWeight: 800 }}>
                 📈 Student Academic Development & Areas Needing Improvement
               </h2>
               <p style={{ margin: "2px 0 0", fontSize: "0.84rem", color: "#64748b" }}>
-                Track each child&#39;s reading progress, homework completion, AI buddy practice logs, and diagnostic areas.
+                Select any registered student to view or update their real progress metrics, strengths, and areas needing improvement.
               </p>
             </div>
 
             <select
               className="form-select"
-              style={{ maxWidth: 320 }}
+              style={{ maxWidth: 340 }}
               value={selectedStudentUser}
               onChange={(e) => setSelectedStudentUser(e.target.value)}
             >
-              <option value="BP-ZAINAB-1001">Zainab Bello (BP-ZAINAB-1001 • Grade 2)</option>
-              {studentAccounts.map((s) => (
-                <option key={s.id} value={s.username}>
-                  {s.studentName} ({s.username} • {s.grade})
+              <option value="">-- Select Student --</option>
+              {allRealStudents.map((s) => (
+                <option key={s.username} value={s.username}>
+                  {s.studentName} ({s.username} • {s.grade || s.courseName})
                 </option>
               ))}
             </select>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 20 }}>
-            <div style={{ padding: 14, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#64748b" }}>LESSONS COMPLETED</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#1d4ed8" }}>
-                {selectedProg.lessonsCompleted} / {selectedProg.totalLessons}
-              </div>
+          {allRealStudents.length === 0 ? (
+            <div style={{ padding: 24, textAlign: "center", color: "#64748b", background: "#f8fafc", borderRadius: 12 }}>
+              No students registered yet. Generate a student login in <code>/admin/credentials</code> or confirm a booking in <code>/admin/bookings</code> first.
             </div>
-            <div style={{ padding: 14, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#64748b" }}>READING PROGRESS</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#059669" }}>
-                {selectedProg.readingProgress}%
+          ) : (
+            <form onSubmit={handleSaveStudentProgressProfile}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 18 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Lessons Completed</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="form-input"
+                    value={editLessonsCompleted}
+                    onChange={(e) => setEditLessonsCompleted(Number(e.target.value))}
+                  />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Reading Progress (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="form-input"
+                    value={editReadingProgress}
+                    onChange={(e) => setEditReadingProgress(Number(e.target.value))}
+                  />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Attendance Rate (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="form-input"
+                    value={editAttendanceRate}
+                    onChange={(e) => setEditAttendanceRate(Number(e.target.value))}
+                  />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Learning Hours</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    className="form-input"
+                    value={editLearningHours}
+                    onChange={(e) => setEditLearningHours(Number(e.target.value))}
+                  />
+                </div>
               </div>
-            </div>
-            <div style={{ padding: 14, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#64748b" }}>ATTENDANCE RATE</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#10b981" }}>
-                {selectedProg.attendanceRate}%
-              </div>
-            </div>
-            <div style={{ padding: 14, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#64748b" }}>LEARNING HOURS</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#d97706" }}>
-                {selectedProg.learningHours} hrs
-              </div>
-            </div>
-          </div>
 
-          <div className="form-row-2col">
-            <div style={{ background: "#ecfdf5", padding: 16, borderRadius: 12, border: "1px solid #a7f3d0" }}>
-              <div style={{ fontWeight: 800, color: "#065f46", marginBottom: 8 }}>
-                ✅ Identified Strengths:
+              <div className="form-row-2col" style={{ marginBottom: 16 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Identified Strengths (One per line)</label>
+                  <textarea
+                    rows={3}
+                    className="form-input"
+                    placeholder="Enter observed strengths for this student..."
+                    value={editStrengthsText}
+                    onChange={(e) => setEditStrengthsText(e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Identified Areas Needing Improvement (One per line)</label>
+                  <textarea
+                    rows={3}
+                    className="form-input"
+                    placeholder="Enter areas where this student needs extra practice..."
+                    value={editImprovementsText}
+                    onChange={(e) => setEditImprovementsText(e.target.value)}
+                  />
+                </div>
               </div>
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: "0.85rem", color: "#064e3b" }}>
-                {selectedProg.customStrengths.map((s, i) => (
-                  <li key={i}>{s}</li>
-                ))}
-              </ul>
-            </div>
 
-            <div style={{ background: "#fffbeb", padding: 16, borderRadius: 12, border: "1px solid #fde68a" }}>
-              <div style={{ fontWeight: 800, color: "#92400e", marginBottom: 8 }}>
-                🎯 Identified Areas Needing Improvement:
-              </div>
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: "0.85rem", color: "#78350f" }}>
-                {selectedProg.customImprovements.map((s, i) => (
-                  <li key={i}>{s}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
+              <button
+                type="submit"
+                disabled={savingProgressProfile}
+                className="btn btn-primary"
+                style={{ padding: "10px 20px" }}
+              >
+                <Save size={16} />
+                <span>{savingProgressProfile ? "Saving..." : "Save Student Progress Record"}</span>
+              </button>
+            </form>
+          )}
         </div>
 
         {/* AI Learning Buddy Practice Logs */}
         <div className="admin-panel-card" style={{ padding: 24 }}>
           <h3 style={{ margin: "0 0 12px", fontSize: "1.05rem", fontWeight: 800 }}>
-            🤖 Recent AI Learning Buddy Sessions (Reading, Pronunciation & Writing)
+            🤖 AI Learning Buddy Sessions ({lmsData.aiLogs.length})
           </h3>
           {lmsData.aiLogs.length === 0 ? (
-            <p style={{ fontSize: "0.85rem", color: "#64748b" }}>
-              No AI practice sessions recorded yet. When students read aloud, practise pronunciation, or submit writing in the AI Learning Buddy, their scores and detected improvement areas appear here.
+            <p style={{ fontSize: "0.85rem", color: "#64748b", margin: 0 }}>
+              No AI practice sessions recorded yet. When students read aloud, practise pronunciation, or submit writing in the AI Learning Buddy, their scores and improvement areas appear here.
             </p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {lmsData.aiLogs.slice(0, 10).map((log) => (
+              {lmsData.aiLogs.map((log) => (
                 <div
                   key={log.id}
                   style={{
@@ -2011,17 +2360,29 @@ export default function AdminLmsManager({
           )}
         </div>
 
-        {/* Broadcast Announcement / Reminder to Students & Parents */}
+        {/* Broadcast or Targeted Notification to Students & Parents */}
         <div className="admin-panel-card" style={{ padding: 24 }}>
           <h3 style={{ margin: "0 0 12px", fontSize: "1.05rem", fontWeight: 800 }}>
-            🔔 Send Portal Notification / Reminder to Students & Parents
+            🔔 Send Portal Notification / Reminder to Specific Student or All Students
           </h3>
           <form onSubmit={handlePostAnnouncement}>
-            <div className="form-row-2col" style={{ marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 12 }}>
+              <select
+                className="form-select"
+                value={announcementTarget}
+                onChange={(e) => setAnnouncementTarget(e.target.value)}
+              >
+                <option value="ALL">🌍 All Students & Parents</option>
+                {allRealStudents.map((s) => (
+                  <option key={s.username} value={s.username}>
+                    👤 {s.studentName} ({s.username})
+                  </option>
+                ))}
+              </select>
               <input
                 type="text"
                 className="form-input"
-                placeholder="Notification Title (e.g. Weekend Public Speaking Workshop)"
+                placeholder="Notification Title"
                 value={announcementTitle}
                 onChange={(e) => setAnnouncementTitle(e.target.value)}
                 required
@@ -2037,7 +2398,7 @@ export default function AdminLmsManager({
             </div>
             <button type="submit" disabled={sendingNotif} className="btn btn-primary" style={{ padding: "10px 20px" }}>
               <Bell size={16} />
-              <span>{sendingNotif ? "Sending..." : "Post Announcement to Student Portals"}</span>
+              <span>{sendingNotif ? "Sending..." : "Send Notification"}</span>
             </button>
           </form>
         </div>
@@ -2046,31 +2407,35 @@ export default function AdminLmsManager({
   }
 
   // ==========================================================================
-  // SECTION 3: GENERATE & SEND DOWNLOADABLE PDF REPORT CARDS TO PARENTS
+  // SECTION 3: GENERATE & SEND DOWNLOADABLE PDF REPORT CARDS (/admin/reports)
   // ==========================================================================
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div className="admin-panel-card" style={{ padding: 24 }}>
-        <h2 style={{ margin: "0 0 6px", fontSize: "1.15rem", fontWeight: 800 }}>
+        <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#4f46e5", textTransform: "uppercase" }}>
+          Dedicated Page • /admin/reports
+        </span>
+        <h2 style={{ margin: "2px 0 6px", fontSize: "1.15rem", fontWeight: 800 }}>
           📄 Generate & Send Downloadable PDF Report Card to Parents
         </h2>
         <p style={{ margin: "0 0 18px", fontSize: "0.84rem", color: "#64748b" }}>
-          Prepare an official academic report card, email it directly to the parent, and publish it for one-click PDF download in the Student & Parent Portal.
+          Select a student, review or customize their subject evaluations, and generate an official PDF Report Card.
         </p>
 
         <form onSubmit={handleGenerateReportCard}>
           <div className="form-row-2col" style={{ marginBottom: 14 }}>
             <div className="form-group">
-              <label className="form-label">Select Student Account</label>
+              <label className="form-label">Select Student</label>
               <select
                 className="form-select"
                 value={rcStudentUser}
                 onChange={(e) => setRcStudentUser(e.target.value)}
+                required
               >
-                <option value="BP-ZAINAB-1001">Zainab Bello (BP-ZAINAB-1001 • Grade 2)</option>
-                {studentAccounts.map((s) => (
-                  <option key={s.id} value={s.username}>
-                    {s.studentName} ({s.username} • {s.email})
+                <option value="">-- Select Student --</option>
+                {allRealStudents.map((s) => (
+                  <option key={s.username} value={s.username}>
+                    {s.studentName} ({s.username} • {s.email || s.grade})
                   </option>
                 ))}
               </select>
@@ -2081,6 +2446,7 @@ export default function AdminLmsManager({
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. First Term Assessment • 2026"
                 value={rcTerm}
                 onChange={(e) => setRcTerm(e.target.value)}
                 required
@@ -2127,14 +2493,39 @@ export default function AdminLmsManager({
 
           {/* Subject Scores Table Editor */}
           <div style={{ marginBottom: 16 }}>
-            <label className="form-label">Subject Evaluations</label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <label className="form-label" style={{ margin: 0 }}>
+                Subject Evaluations ({rcSubjects.length})
+              </label>
+              <button
+                type="button"
+                onClick={() =>
+                  setRcSubjects((prev) => [
+                    ...prev,
+                    { subject: "", score: 0, grade: "", remark: "" },
+                  ])
+                }
+                style={{
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  fontSize: "0.75rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                + Add Subject Row
+              </button>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {rcSubjects.map((subj, idx) => (
                 <div
                   key={idx}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "2fr 90px 80px 2fr",
+                    gridTemplateColumns: "2fr 90px 80px 2fr auto",
                     gap: 8,
                     alignItems: "center",
                   }}
@@ -2142,6 +2533,7 @@ export default function AdminLmsManager({
                   <input
                     type="text"
                     className="form-input"
+                    placeholder="Subject name"
                     value={subj.subject}
                     onChange={(e) => {
                       const updated = [...rcSubjects];
@@ -2152,18 +2544,20 @@ export default function AdminLmsManager({
                   <input
                     type="number"
                     className="form-input"
+                    placeholder="Score"
                     value={subj.score}
                     onChange={(e) => {
                       const updated = [...rcSubjects];
                       const sc = Number(e.target.value);
                       updated[idx].score = sc;
-                      updated[idx].grade = sc >= 90 ? "A+" : sc >= 80 ? "A" : sc >= 70 ? "B+" : "B";
+                      updated[idx].grade = sc >= 90 ? "A+" : sc >= 80 ? "A" : sc >= 70 ? "B+" : sc >= 60 ? "B" : "C";
                       setRcSubjects(updated);
                     }}
                   />
                   <input
                     type="text"
                     className="form-input"
+                    placeholder="Grade"
                     value={subj.grade}
                     onChange={(e) => {
                       const updated = [...rcSubjects];
@@ -2174,6 +2568,7 @@ export default function AdminLmsManager({
                   <input
                     type="text"
                     className="form-input"
+                    placeholder="Teacher remark for this subject"
                     value={subj.remark}
                     onChange={(e) => {
                       const updated = [...rcSubjects];
@@ -2181,6 +2576,24 @@ export default function AdminLmsManager({
                       setRcSubjects(updated);
                     }}
                   />
+                  {rcSubjects.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRcSubjects((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                      style={{
+                        background: "#fee2e2",
+                        color: "#dc2626",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "8px 10px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -2192,6 +2605,7 @@ export default function AdminLmsManager({
               <textarea
                 rows={3}
                 className="form-input"
+                placeholder="Enter student's key strengths..."
                 value={rcStrengths}
                 onChange={(e) => setRcStrengths(e.target.value)}
               />
@@ -2201,6 +2615,7 @@ export default function AdminLmsManager({
               <textarea
                 rows={3}
                 className="form-input"
+                placeholder="Enter areas needing improvement..."
                 value={rcImprovements}
                 onChange={(e) => setRcImprovements(e.target.value)}
               />
@@ -2212,6 +2627,7 @@ export default function AdminLmsManager({
             <textarea
               rows={2}
               className="form-input"
+              placeholder="Write overall term remark for the student and parent..."
               value={rcComment}
               onChange={(e) => setRcComment(e.target.value)}
               required
@@ -2240,8 +2656,8 @@ export default function AdminLmsManager({
           📚 Issued Student Report Cards ({lmsData.reportCards.length})
         </h3>
         {lmsData.reportCards.length === 0 ? (
-          <p style={{ fontSize: "0.84rem", color: "#64748b" }}>
-            No report cards generated yet. Use the form above to generate and email your first PDF Report Card!
+          <p style={{ fontSize: "0.84rem", color: "#64748b", margin: 0 }}>
+            No report cards generated yet.
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
