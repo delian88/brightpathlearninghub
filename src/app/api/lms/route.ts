@@ -2,13 +2,38 @@ import { NextResponse } from "next/server";
 import { getLmsData, saveLmsData } from "@/db";
 import {
   getOrCreateStudentProgress,
+  evaluateHomeworkQuestion,
   type HomeworkAssignment,
+  type HomeworkQuestion,
   type HomeworkSubmission,
+  type StudentQuestionAnswer,
+  type QuestionGradeEvaluation,
+  type AssignmentLifecycleStatus,
   type StudentReportCard,
   type PortalNotification,
   type AiPracticeLog,
 } from "@/lib/lmsData";
 import { sendReportCardEmail } from "@/lib/email";
+
+function inferMarkingMethod(type: string) {
+  switch (type) {
+    case "multiple-choice":
+    case "true-false":
+    case "matching":
+    case "fill-in-blank":
+    case "spelling":
+    case "objective":
+      return "automatic" as const;
+    case "creative-writing":
+      return "teacher-ai-suggestions" as const;
+    case "reading-comprehension":
+    case "handwriting":
+    case "recorded-reading":
+    case "subjective":
+    default:
+      return "ai-teacher-review" as const;
+  }
+}
 
 export async function GET(request: Request) {
   try {
@@ -21,9 +46,16 @@ export async function GET(request: Request) {
 
     if (studentUsername) {
       const progress = getOrCreateStudentProgress(lms, studentUsername, studentName);
+      const todayIso = new Date().toISOString().split("T")[0];
 
       const assignedHomework = lms.assignments.filter((hw) => {
-        if (hw.targetType === "all") return true;
+        // Hide Draft assignments from students
+        if (hw.assignmentStatus === "Draft") return false;
+        // If scheduled for a future date, hide until that date arrives
+        if (hw.scheduledPublishDate && hw.scheduledPublishDate > todayIso) {
+          return false;
+        }
+        if (hw.targetType === "all" || hw.targetType === "group") return true;
         if (
           hw.targetType === "student" &&
           hw.assignedStudentUsername?.toUpperCase() === studentUsername
@@ -88,17 +120,28 @@ export async function POST(request: Request) {
     const { action } = body;
     const lms = await getLmsData();
 
-    // 1. TEACHER/ADMIN: Create & Assign Homework (Individual Student or Entire Class)
+    // 1. TEACHER/ADMIN: Create & Assign Homework (Supports Draft/Published, Scheduled Date, Attachments, Audio, 9 Question Types)
     if (action === "create-homework") {
       const {
         title,
         description,
         courseName,
+        subject,
+        topic,
         grade = "All Grades",
         targetType = "all",
+        targetGroupName,
         assignedStudentUsername,
         assignedStudentName,
+        audioInstructionText,
+        audioInstructionUrl,
+        attachments = [],
+        passingScore = 60,
         dueDate,
+        scheduledPublishDate,
+        assignmentStatus = "Published",
+        allowLateSubmission = true,
+        allowResubmission = true,
         questions = [],
       } = body;
 
@@ -114,52 +157,132 @@ export async function POST(request: Request) {
         0
       );
 
+      const resolvedCourse = String(courseName || subject || "English Phonics & Reading").trim();
+      const resolvedSubject = String(subject || resolvedCourse).trim();
+      const resolvedTopic = String(topic || title).trim();
+
+      const formattedQuestions: HomeworkQuestion[] = questions.map((q: any, idx: number) => {
+        const qType = q.type || "multiple-choice";
+        return {
+          id: q.id || `q-${Date.now()}-${idx}`,
+          type: qType,
+          markingMethod: q.markingMethod || inferMarkingMethod(qType),
+          prompt: String(q.prompt || "").trim(),
+          options: Array.isArray(q.options) ? q.options : undefined,
+          correctAnswer: q.correctAnswer !== undefined ? String(q.correctAnswer).trim() : undefined,
+          acceptedAnswers: Array.isArray(q.acceptedAnswers)
+            ? q.acceptedAnswers.map((a: any) => String(a).trim()).filter(Boolean)
+            : undefined,
+          matchingPairs: Array.isArray(q.matchingPairs) ? q.matchingPairs : undefined,
+          readingPassage: q.readingPassage ? String(q.readingPassage).trim() : undefined,
+          points: Number(q.points || 20),
+          skillTag: String(q.skillTag || resolvedTopic || resolvedCourse || "General Mastery"),
+        };
+      });
+
+      const statusFlag: "Draft" | "Published" =
+        assignmentStatus === "Draft" ? "Draft" : "Published";
+
       const newAssignment: HomeworkAssignment = {
         id: `hw-${Date.now()}`,
         title: String(title).trim(),
-        description: String(description || "Complete all questions carefully and submit online.").trim(),
-        courseName: String(courseName || "English Phonics & Reading").trim(),
+        description: String(
+          description || "Read or listen to the instructions carefully and complete all questions."
+        ).trim(),
+        courseName: resolvedCourse,
+        subject: resolvedSubject,
+        topic: resolvedTopic,
         grade: String(grade).trim(),
         targetType,
+        targetGroupName: targetGroupName ? String(targetGroupName).trim() : undefined,
         assignedStudentUsername: assignedStudentUsername
           ? String(assignedStudentUsername).trim().toUpperCase()
           : undefined,
         assignedStudentName: assignedStudentName ? String(assignedStudentName).trim() : undefined,
+        audioInstructionText: audioInstructionText ? String(audioInstructionText).trim() : undefined,
+        audioInstructionUrl: audioInstructionUrl ? String(audioInstructionUrl) : undefined,
+        attachments: Array.isArray(attachments) ? attachments : [],
         dueDate:
           dueDate || new Date(Date.now() + 4 * 86400000).toISOString().split("T")[0],
+        scheduledPublishDate: scheduledPublishDate ? String(scheduledPublishDate) : undefined,
         totalPoints,
-        questions: questions.map((q: any, idx: number) => ({
-          id: q.id || `q-${Date.now()}-${idx}`,
-          type: q.type === "subjective" ? "subjective" : "objective",
-          prompt: String(q.prompt).trim(),
-          options: q.type === "objective" ? q.options || [] : undefined,
-          correctAnswer: q.type === "objective" ? String(q.correctAnswer || "").trim() : undefined,
-          points: Number(q.points || 20),
-          skillTag: String(q.skillTag || courseName || "General Mastery"),
-        })),
+        passingScore: Number(passingScore || 60),
+        assignmentStatus: statusFlag,
+        allowLateSubmission: Boolean(allowLateSubmission),
+        allowResubmission: Boolean(allowResubmission),
+        questions: formattedQuestions,
         createdAt: new Date().toISOString(),
       };
 
       lms.assignments.unshift(newAssignment);
 
-      const notif: PortalNotification = {
-        id: `notif-${Date.now()}`,
-        targetStudentUsername:
-          targetType === "student" && assignedStudentUsername
-            ? String(assignedStudentUsername).toUpperCase()
-            : "ALL",
-        type: "homework",
-        title: `New Homework Assigned: ${newAssignment.title}`,
-        message: `Course: ${newAssignment.courseName} • Due: ${newAssignment.dueDate} (${newAssignment.totalPoints} pts)`,
-        createdAt: new Date().toISOString(),
-      };
-      lms.notifications.unshift(notif);
+      if (statusFlag === "Published") {
+        const notif: PortalNotification = {
+          id: `notif-${Date.now()}`,
+          targetStudentUsername:
+            targetType === "student" && assignedStudentUsername
+              ? String(assignedStudentUsername).toUpperCase()
+              : "ALL",
+          type: "homework",
+          title: `New Homework Assigned: ${newAssignment.title}`,
+          message: `Subject: ${newAssignment.subject} (${newAssignment.topic}) • Due: ${newAssignment.dueDate} • Pass Mark: ${newAssignment.passingScore}%`,
+          createdAt: new Date().toISOString(),
+        };
+        lms.notifications.unshift(notif);
+      }
 
       await saveLmsData(lms);
       return NextResponse.json({
         success: true,
-        message: "Homework assignment created and assigned successfully!",
+        message:
+          statusFlag === "Draft"
+            ? "Homework saved as Draft! Publish it anytime when ready."
+            : "Homework assignment published and assigned to students!",
         assignment: newAssignment,
+      });
+    }
+
+    // 1b. TEACHER/ADMIN: Toggle Homework Status (Draft <-> Published)
+    if (action === "toggle-homework-status") {
+      const { id, assignmentStatus } = body;
+      const hw = lms.assignments.find((a) => a.id === id);
+      if (!hw) {
+        return NextResponse.json(
+          { success: false, message: "Homework assignment not found." },
+          { status: 404 }
+        );
+      }
+
+      const nextStatus: "Draft" | "Published" =
+        assignmentStatus === "Draft"
+          ? "Draft"
+          : assignmentStatus === "Published"
+          ? "Published"
+          : hw.assignmentStatus === "Draft"
+          ? "Published"
+          : "Draft";
+
+      hw.assignmentStatus = nextStatus;
+
+      if (nextStatus === "Published") {
+        lms.notifications.unshift({
+          id: `notif-${Date.now()}`,
+          targetStudentUsername:
+            hw.targetType === "student" && hw.assignedStudentUsername
+              ? hw.assignedStudentUsername.toUpperCase()
+              : "ALL",
+          type: "homework",
+          title: `New Homework Published: ${hw.title}`,
+          message: `Subject: ${hw.subject || hw.courseName} • Due: ${hw.dueDate} (${hw.totalPoints} pts)`,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message: `Assignment status updated to ${nextStatus}.`,
+        assignment: hw,
       });
     }
 
@@ -174,8 +297,8 @@ export async function POST(request: Request) {
       });
     }
 
-    // 3. STUDENT: Submit Homework Online (Auto-grades Objective Questions!)
-    if (action === "submit-homework") {
+    // 2b. STUDENT: Save Unfinished Work ("In Progress")
+    if (action === "save-homework-progress") {
       const {
         homeworkId,
         studentUsername,
@@ -183,6 +306,7 @@ export async function POST(request: Request) {
         parentEmail,
         grade = "Grade 2",
         answers = {},
+        richAnswers = {},
       } = body;
 
       const assignment = lms.assignments.find((a) => a.id === homeworkId);
@@ -193,34 +317,113 @@ export async function POST(request: Request) {
         );
       }
 
+      const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
+      const existingIdx = lms.submissions.findIndex(
+        (s) => s.homeworkId === homeworkId && s.studentUsername.toUpperCase() === cleanUser
+      );
+
+      const existing = existingIdx >= 0 ? lms.submissions[existingIdx] : undefined;
+
+      const draftSub: HomeworkSubmission = {
+        id: existing?.id || `sub-draft-${Date.now()}`,
+        homeworkId: assignment.id,
+        homeworkTitle: assignment.title,
+        courseName: assignment.courseName,
+        subject: assignment.subject || assignment.courseName,
+        topic: assignment.topic || assignment.title,
+        studentUsername: cleanUser,
+        studentName: String(studentName || existing?.studentName || "Bright Scholar"),
+        parentEmail: parentEmail ? String(parentEmail) : existing?.parentEmail,
+        grade: String(grade || existing?.grade || "Grade 2"),
+        answers,
+        richAnswers,
+        questionEvaluations: existing?.questionEvaluations || {},
+        objectiveScore: existing?.objectiveScore || 0,
+        subjectiveScore: existing?.subjectiveScore || 0,
+        totalScore: existing?.totalScore || 0,
+        maxPoints: assignment.totalPoints || 100,
+        percentage: existing?.percentage || 0,
+        passingScore: assignment.passingScore || 60,
+        passed: existing?.passed || false,
+        status: "in-progress",
+        lifecycleStatus: "In Progress",
+        isLate: false,
+        resubmissionCount: existing?.resubmissionCount || 0,
+        allowResubmission: assignment.allowResubmission ?? true,
+        teacherFeedback:
+          existing?.teacherFeedback ||
+          "Unfinished work saved! You can return anytime to complete and submit.",
+        weakSkillsIdentified: existing?.weakSkillsIdentified || [],
+        savedAt: new Date().toISOString(),
+        submittedAt: existing?.submittedAt || new Date().toISOString(),
+      };
+
+      if (existingIdx >= 0) {
+        lms.submissions[existingIdx] = draftSub;
+      } else {
+        lms.submissions.unshift(draftSub);
+      }
+
+      await saveLmsData(lms);
+
+      return NextResponse.json({
+        success: true,
+        message: "Unfinished homework saved ('In Progress')! You can continue anytime.",
+        submission: draftSub,
+      });
+    }
+
+    // 3. STUDENT: Submit Homework Online (Auto-grades Objective + AI-Assists Subjective/Reading/Handwriting!)
+    if (action === "submit-homework") {
+      const {
+        homeworkId,
+        studentUsername,
+        studentName,
+        parentEmail,
+        grade = "Grade 2",
+        answers = {},
+        richAnswers = {},
+      } = body;
+
+      const assignment = lms.assignments.find((a) => a.id === homeworkId);
+      if (!assignment) {
+        return NextResponse.json(
+          { success: false, message: "Homework assignment not found." },
+          { status: 404 }
+        );
+      }
+
+      const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
+      const previousSub = lms.submissions.find(
+        (s) => s.homeworkId === homeworkId && s.studentUsername.toUpperCase() === cleanUser
+      );
+
       let objectiveScore = 0;
       let subjectiveAutoEstimate = 0;
-      let hasSubjective = false;
+      let requiresTeacherReview = false;
       const weakSkillsIdentified: string[] = [];
+      const questionEvaluations: Record<string, QuestionGradeEvaluation> = {};
 
       for (const q of assignment.questions) {
-        const studentAns = String(answers[q.id] || "").trim();
-        if (q.type === "objective") {
-          const isCorrect =
-            studentAns.toLowerCase() === String(q.correctAnswer || "").trim().toLowerCase();
-          if (isCorrect) {
-            objectiveScore += Number(q.points || 0);
-          } else if (q.skillTag && !weakSkillsIdentified.includes(q.skillTag)) {
+        const rawText = String(answers[q.id] || "").trim();
+        const rich: StudentQuestionAnswer | undefined = richAnswers[q.id];
+        const evaluation = evaluateHomeworkQuestion(q, rawText, rich);
+        questionEvaluations[q.id] = evaluation;
+
+        if (evaluation.markingMethod === "automatic") {
+          objectiveScore += evaluation.finalScore;
+          if (!evaluation.isCorrect && q.skillTag && !weakSkillsIdentified.includes(q.skillTag)) {
             weakSkillsIdentified.push(q.skillTag);
           }
         } else {
-          hasSubjective = true;
-          // Provide a provisional writing score based on completeness until teacher reviews
-          const wordCount = studentAns.split(/\s+/).filter(Boolean).length;
-          if (wordCount >= 12) {
-            subjectiveAutoEstimate += Number(q.points || 0);
-          } else if (wordCount >= 5) {
-            subjectiveAutoEstimate += Math.round(Number(q.points || 0) * 0.8);
-          } else if (wordCount > 0) {
-            subjectiveAutoEstimate += Math.round(Number(q.points || 0) * 0.5);
-            weakSkillsIdentified.push(q.skillTag || "Sentence Expansion & Writing");
-          } else {
-            weakSkillsIdentified.push(q.skillTag || "Written Expression");
+          requiresTeacherReview = true;
+          subjectiveAutoEstimate += evaluation.finalScore;
+          if (
+            evaluation.finalScore < Number(q.points || 20) * 0.65 &&
+            q.skillTag &&
+            !weakSkillsIdentified.includes(q.skillTag)
+          ) {
+            weakSkillsIdentified.push(q.skillTag);
           }
         }
       }
@@ -228,42 +431,68 @@ export async function POST(request: Request) {
       const maxPoints = assignment.totalPoints || 100;
       const totalScore = objectiveScore + subjectiveAutoEstimate;
       const percentage = Math.min(100, Math.round((totalScore / maxPoints) * 100));
+      const passingScore = assignment.passingScore || 60;
+      const passed = percentage >= passingScore;
 
-      const autoFeedback = !hasSubjective
+      const todayDate = new Date().toISOString().split("T")[0];
+      const isLate = Boolean(assignment.dueDate && todayDate > assignment.dueDate);
+
+      const wasPreviouslySubmitted =
+        previousSub &&
+        previousSub.lifecycleStatus !== "In Progress" &&
+        previousSub.status !== "in-progress";
+      const resubmissionCount = wasPreviouslySubmitted
+        ? (previousSub?.resubmissionCount || 0) + 1
+        : previousSub?.resubmissionCount || 0;
+
+      const lifecycleStatus: AssignmentLifecycleStatus = requiresTeacherReview
+        ? "Under Review"
+        : "Graded";
+
+      const autoFeedback = !requiresTeacherReview
         ? percentage >= 85
-          ? "Excellent work! All objective questions were automatically graded with high accuracy."
-          : `Good effort! Your objective questions were auto-graded (${percentage}%). Review ${
+          ? "Excellent work! All automatic questions were graded with high accuracy."
+          : `Good effort! Your automatic questions were graded (${percentage}%). Review ${
               weakSkillsIdentified.join(", ") || "the missed questions"
             } for 100% mastery.`
-        : `Objective questions auto-graded (${objectiveScore} pts). Written response received for teacher review.`;
+        : `Automatic questions scored ${objectiveScore} pts. AI-assisted assessment (${subjectiveAutoEstimate} pts) is now Under Review by your teacher.`;
 
-      const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
-
-      // Remove any previous submission for the same homework by this student
+      // Remove previous submission record for this student + homework
       lms.submissions = lms.submissions.filter(
         (s) => !(s.homeworkId === homeworkId && s.studentUsername.toUpperCase() === cleanUser)
       );
 
       const newSubmission: HomeworkSubmission = {
-        id: `sub-${Date.now()}`,
+        id: previousSub?.id && !previousSub.id.startsWith("sub-draft-") ? previousSub.id : `sub-${Date.now()}`,
         homeworkId: assignment.id,
         homeworkTitle: assignment.title,
         courseName: assignment.courseName,
+        subject: assignment.subject || assignment.courseName,
+        topic: assignment.topic || assignment.title,
         studentUsername: cleanUser,
         studentName: String(studentName || "Bright Scholar"),
         parentEmail: parentEmail ? String(parentEmail) : undefined,
         grade: String(grade),
         answers,
+        richAnswers,
+        questionEvaluations,
         objectiveScore,
         subjectiveScore: subjectiveAutoEstimate,
         totalScore,
         maxPoints,
         percentage,
-        status: hasSubjective ? "submitted" : "graded",
+        passingScore,
+        passed,
+        status: requiresTeacherReview ? "submitted" : "graded",
+        lifecycleStatus,
+        isLate,
+        resubmissionCount,
+        allowResubmission: assignment.allowResubmission ?? true,
         teacherFeedback: autoFeedback,
         weakSkillsIdentified,
+        savedAt: new Date().toISOString(),
         submittedAt: new Date().toISOString(),
-        gradedAt: hasSubjective ? undefined : new Date().toISOString(),
+        gradedAt: requiresTeacherReview ? undefined : new Date().toISOString(),
       };
 
       lms.submissions.unshift(newSubmission);
@@ -287,7 +516,7 @@ export async function POST(request: Request) {
         prog.badges.unshift({
           id: "badge-hw-hero",
           title: "Homework Hero",
-          description: "Submitted online homework & completed auto-graded quiz",
+          description: "Submitted online homework & completed interactive assessment",
           icon: "📝",
           earnedAt: new Date().toISOString(),
           color: "#8b5cf6",
@@ -312,15 +541,15 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         success: true,
-        message: hasSubjective
-          ? `Homework submitted! Objective score: ${objectiveScore} pts (${percentage}% overall).`
-          : `Homework submitted & auto-graded! You scored ${totalScore}/${maxPoints} (${percentage}%).`,
+        message: requiresTeacherReview
+          ? `Homework submitted (${lifecycleStatus})! Auto-marked: ${objectiveScore} pts, AI provisional: ${subjectiveAutoEstimate} pts (${percentage}%).`
+          : `Homework submitted & automatically graded! You scored ${totalScore}/${maxPoints} (${percentage}%).`,
         submission: newSubmission,
         progress: prog,
       });
     }
 
-    // 4. TEACHER/ADMIN: Manually Grade Submission & Provide Feedback
+    // 4. TEACHER/ADMIN: Grade Submission, Override Any AI/Auto Score, or Return for Resubmission
     if (action === "grade-submission") {
       const {
         submissionId,
@@ -328,6 +557,9 @@ export async function POST(request: Request) {
         totalScore,
         teacherFeedback,
         weakSkillsIdentified,
+        questionOverrides,
+        lifecycleStatus = "Graded",
+        allowResubmission,
       } = body;
 
       const sub = lms.submissions.find((s) => s.id === submissionId);
@@ -338,16 +570,84 @@ export async function POST(request: Request) {
         );
       }
 
-      if (subjectiveScore !== undefined) {
-        sub.subjectiveScore = Number(subjectiveScore);
-      }
-      if (totalScore !== undefined) {
-        sub.totalScore = Number(totalScore);
+      const assignment = lms.assignments.find((a) => a.id === sub.homeworkId);
+
+      // Apply per-question teacher overrides if provided
+      if (questionOverrides && typeof questionOverrides === "object") {
+        if (!sub.questionEvaluations) sub.questionEvaluations = {};
+        let newObjScore = 0;
+        let newSubjScore = 0;
+
+        const questionsList = assignment?.questions || [];
+        for (const q of questionsList) {
+          const existingEval =
+            sub.questionEvaluations[q.id] ||
+            evaluateHomeworkQuestion(q, String(sub.answers?.[q.id] || ""), sub.richAnswers?.[q.id]);
+
+          const overrideEntry = questionOverrides[q.id];
+          if (overrideEntry !== undefined) {
+            const overrideNum =
+              typeof overrideEntry === "number"
+                ? overrideEntry
+                : overrideEntry.score !== undefined
+                ? Number(overrideEntry.score)
+                : existingEval.finalScore;
+
+            const clampedScore = Math.max(0, Math.min(Number(q.points || 20), overrideNum));
+            existingEval.teacherOverrideScore = clampedScore;
+            existingEval.finalScore = clampedScore;
+            if (typeof overrideEntry === "object" && overrideEntry.comment !== undefined) {
+              existingEval.teacherComment = String(overrideEntry.comment);
+            }
+          }
+
+          sub.questionEvaluations[q.id] = existingEval;
+          if (existingEval.markingMethod === "automatic") {
+            newObjScore += existingEval.finalScore;
+          } else {
+            newSubjScore += existingEval.finalScore;
+          }
+        }
+
+        sub.objectiveScore = newObjScore;
+        sub.subjectiveScore = newSubjScore;
+        sub.totalScore = newObjScore + newSubjScore;
       } else {
-        sub.totalScore = sub.objectiveScore + sub.subjectiveScore;
+        if (subjectiveScore !== undefined) {
+          sub.subjectiveScore = Number(subjectiveScore);
+        }
+        if (totalScore !== undefined) {
+          sub.totalScore = Number(totalScore);
+        } else {
+          sub.totalScore = sub.objectiveScore + sub.subjectiveScore;
+        }
       }
+
       sub.percentage = Math.min(100, Math.round((sub.totalScore / (sub.maxPoints || 100)) * 100));
-      sub.status = "graded";
+      sub.passed = sub.percentage >= (sub.passingScore || assignment?.passingScore || 60);
+
+      const resolvedLifecycle: AssignmentLifecycleStatus =
+        lifecycleStatus === "Returned"
+          ? "Returned"
+          : lifecycleStatus === "Under Review"
+          ? "Under Review"
+          : "Graded";
+
+      sub.lifecycleStatus = resolvedLifecycle;
+      sub.status =
+        resolvedLifecycle === "Returned"
+          ? "returned"
+          : resolvedLifecycle === "Under Review"
+          ? "under-review"
+          : "graded";
+
+      if (resolvedLifecycle === "Returned") {
+        sub.allowResubmission = true;
+        sub.returnedAt = new Date().toISOString();
+      } else if (allowResubmission !== undefined) {
+        sub.allowResubmission = Boolean(allowResubmission);
+      }
+
       if (teacherFeedback !== undefined) {
         sub.teacherFeedback = String(teacherFeedback).trim();
       }
@@ -361,8 +661,16 @@ export async function POST(request: Request) {
         id: `notif-grade-${Date.now()}`,
         targetStudentUsername: sub.studentUsername.toUpperCase(),
         type: "grade",
-        title: `Homework Graded: ${sub.homeworkTitle}`,
-        message: `Score: ${sub.totalScore}/${sub.maxPoints} (${sub.percentage}%) • Teacher Feedback: "${sub.teacherFeedback}"`,
+        title:
+          resolvedLifecycle === "Returned"
+            ? `Homework Returned for Revision: ${sub.homeworkTitle}`
+            : `Homework Graded: ${sub.homeworkTitle}`,
+        message:
+          resolvedLifecycle === "Returned"
+            ? `Current Score: ${sub.totalScore}/${sub.maxPoints} (${sub.percentage}%) • Teacher Note: "${sub.teacherFeedback}" — Please review and resubmit.`
+            : `Score: ${sub.totalScore}/${sub.maxPoints} (${sub.percentage}% • ${
+                sub.passed ? "PASSED" : "Needs Practice"
+              }) • Teacher Feedback: "${sub.teacherFeedback}"`,
         createdAt: new Date().toISOString(),
       });
 
@@ -370,7 +678,10 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         success: true,
-        message: `Graded submission for ${sub.studentName} (${sub.percentage}%)!`,
+        message:
+          resolvedLifecycle === "Returned"
+            ? `Returned submission to ${sub.studentName} for revision & resubmission.`
+            : `Graded submission for ${sub.studentName} (${sub.percentage}% • ${resolvedLifecycle})!`,
         submission: sub,
       });
     }
@@ -661,4 +972,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

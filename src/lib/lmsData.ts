@@ -1,48 +1,152 @@
+export type QuestionType =
+  | "multiple-choice"
+  | "true-false"
+  | "matching"
+  | "fill-in-blank"
+  | "spelling"
+  | "reading-comprehension"
+  | "handwriting"
+  | "creative-writing"
+  | "recorded-reading"
+  // Legacy aliases for backward compatibility
+  | "objective"
+  | "subjective";
+
+export type MarkingMethod =
+  | "automatic"
+  | "automatic-accepted-rules"
+  | "ai-assisted-teacher-review"
+  | "ai-teacher-review"
+  | "teacher-with-ai-suggestions"
+  | "teacher-ai-suggestions";
+
+export type AssignmentLifecycleStatus =
+  | "Draft"
+  | "Published"
+  | "In Progress"
+  | "Submitted"
+  | "Under Review"
+  | "Graded"
+  | "Returned";
+
+export interface MatchingPair {
+  left: string;
+  right: string;
+}
+
+export interface HomeworkAttachment {
+  id: string;
+  name?: string;
+  title?: string;
+  fileName?: string;
+  type: "pdf" | "image" | "audio" | "material";
+  url: string; // Data URL or external URL
+  sizeLabel?: string;
+}
+
 export interface HomeworkQuestion {
   id: string;
-  type: "objective" | "subjective";
+  type: QuestionType;
+  markingMethod?: MarkingMethod;
   prompt: string;
-  options?: string[]; // For objective multiple-choice questions
-  correctAnswer?: string; // For automatic grading of objective questions
+  passageText?: string; // For reading comprehension or recorded reading
+  readingPassage?: string; // Alias for reading comprehension or recorded reading passage
+  spellingWord?: string; // For simple spelling (spoken aloud by TTS)
+  options?: string[]; // For multiple-choice or true-false
+  correctAnswer?: string; // For MC, True/False, Simple Spelling
+  acceptedAnswers?: string[]; // For fill-in-the-blank accepted-answer rules
+  matchingPairs?: MatchingPair[]; // For matching questions
+  allowDrawing?: boolean; // Allow interactive handwriting/drawing canvas
+  allowImageUpload?: boolean; // Allow uploading photo of handwritten work
+  allowVoiceRecording?: boolean; // Allow recording voice reading
   points: number;
-  skillTag?: string; // e.g., "Phonics & Reading", "Pronunciation", "Writing & Grammar", "Public Speaking", "Mathematics", "Coding"
+  skillTag?: string;
 }
 
 export interface HomeworkAssignment {
   id: string;
   title: string;
+  subject?: string;
+  topic?: string;
   description: string;
+  audioInstructionText?: string;
+  audioInstructionUrl?: string; // Recorded or uploaded teacher audio instruction
+  attachments?: HomeworkAttachment[]; // PDF worksheets, images, learning materials
   courseName: string;
-  grade: string; // e.g., "All Grades" or "Grade 2"
-  targetType: "all" | "course" | "student";
+  grade: string;
+  targetType: "all" | "course" | "group" | "student";
+  targetGroupName?: string;
   assignedStudentUsername?: string;
   assignedStudentName?: string;
   dueDate: string;
+  scheduledPublishDate?: string;
+  assignmentStatus?: "Draft" | "Published";
   totalPoints: number;
+  passingScore?: number; // e.g., 60 (points or %)
+  allowLateSubmission?: boolean;
+  allowResubmission?: boolean;
   questions: HomeworkQuestion[];
   createdAt: string;
+}
+
+export interface StudentQuestionAnswer {
+  questionId: string;
+  textAnswer?: string;
+  matchingAnswers?: Record<string, string>; // left -> selected right
+  drawingDataUrl?: string; // Canvas drawing / handwriting PNG data URL
+  uploadedImageUrl?: string; // Photo of handwritten work data URL
+  uploadedImageName?: string;
+  uploadedFileName?: string;
+  voiceRecordingUrl?: string; // Recorded audio data URL
+  voiceTranscript?: string; // Speech-to-text transcript of recorded reading
+}
+
+export interface QuestionGradeEvaluation {
+  questionId: string;
+  maxPoints: number;
+  markingMethod: MarkingMethod;
+  autoOrAiScore: number;
+  teacherOverrideScore?: number;
+  finalScore: number;
+  isCorrect?: boolean;
+  aiSuggestionFeedback: string;
+  teacherComment?: string;
 }
 
 export interface HomeworkSubmission {
   id: string;
   homeworkId: string;
   homeworkTitle: string;
+  subject?: string;
+  topic?: string;
   courseName: string;
   studentUsername: string;
   studentName: string;
   parentEmail?: string;
   grade: string;
-  answers: Record<string, string>;
+  answers: Record<string, string>; // Legacy simple map
+  richAnswers?: Record<string, StudentQuestionAnswer>; // Full multimodal answers
+  questionEvaluations?: Record<string, QuestionGradeEvaluation>;
   objectiveScore: number;
   subjectiveScore: number;
+  aiSuggestedTotalScore?: number;
   totalScore: number;
   maxPoints: number;
+  passingScore?: number;
+  passed?: boolean;
   percentage: number;
-  status: "submitted" | "graded";
+  status: "in-progress" | "submitted" | "under-review" | "graded" | "returned";
+  lifecycleStatus?: AssignmentLifecycleStatus; // Draft -> Published -> In Progress -> Submitted -> Under Review -> Graded -> Returned
+  isLate?: boolean;
+  resubmissionCount?: number;
+  allowResubmission?: boolean;
   teacherFeedback: string;
   weakSkillsIdentified: string[];
+  lastSavedAt?: string;
+  savedAt?: string;
   submittedAt: string;
   gradedAt?: string;
+  returnedAt?: string;
 }
 
 export interface StudentBadge {
@@ -107,7 +211,7 @@ export interface StudentReportCard {
 
 export interface PortalNotification {
   id: string;
-  targetStudentUsername: string; // "ALL" or specific username
+  targetStudentUsername: string;
   type: "homework" | "grade" | "report" | "announcement" | "reminder";
   title: string;
   message: string;
@@ -138,6 +242,276 @@ export interface LmsStateData {
   notifications: PortalNotification[];
   progressRecords: Record<string, StudentProgressRecord>;
   aiLogs: AiPracticeLog[];
+}
+
+export const QUESTION_TYPE_LABELS: Record<
+  string,
+  { label: string; markingLabel: string; method: MarkingMethod }
+> = {
+  "multiple-choice": {
+    label: "Multiple Choice",
+    markingLabel: "Automatic",
+    method: "automatic",
+  },
+  "true-false": {
+    label: "True / False",
+    markingLabel: "Automatic",
+    method: "automatic",
+  },
+  matching: {
+    label: "Matching Questions",
+    markingLabel: "Automatic",
+    method: "automatic",
+  },
+  "fill-in-blank": {
+    label: "Fill in the Blanks",
+    markingLabel: "Automatic (Accepted-Answer Rules)",
+    method: "automatic-accepted-rules",
+  },
+  spelling: {
+    label: "Simple Spelling (Audio Word)",
+    markingLabel: "Automatic",
+    method: "automatic",
+  },
+  "reading-comprehension": {
+    label: "Reading Comprehension",
+    markingLabel: "AI-Assisted + Teacher Review",
+    method: "ai-assisted-teacher-review",
+  },
+  handwriting: {
+    label: "Handwriting / Draw / Photo Upload",
+    markingLabel: "AI-Assisted + Teacher Review",
+    method: "ai-assisted-teacher-review",
+  },
+  "creative-writing": {
+    label: "Essays & Creative Writing",
+    markingLabel: "Teacher Grading with AI Suggestions",
+    method: "teacher-with-ai-suggestions",
+  },
+  "recorded-reading": {
+    label: "Recorded Voice Reading",
+    markingLabel: "AI-Assisted Assessment + Teacher Review",
+    method: "ai-assisted-teacher-review",
+  },
+  objective: {
+    label: "Multiple Choice (Objective)",
+    markingLabel: "Automatic",
+    method: "automatic",
+  },
+  subjective: {
+    label: "Written Response (Subjective)",
+    markingLabel: "Teacher Grading with AI Suggestions",
+    method: "teacher-with-ai-suggestions",
+  },
+};
+
+export function evaluateHomeworkQuestion(
+  q: HomeworkQuestion,
+  rawTextAnswer: string,
+  rich?: StudentQuestionAnswer
+): QuestionGradeEvaluation {
+  const maxPoints = Number(q.points || 10);
+  const textAns = String(rich?.textAnswer ?? rawTextAnswer ?? "").trim();
+  const qType = q.type === "objective" ? "multiple-choice" : q.type === "subjective" ? "creative-writing" : q.type;
+  const meta = QUESTION_TYPE_LABELS[qType] || QUESTION_TYPE_LABELS["multiple-choice"];
+
+  // 1. Multiple Choice / True-False / Simple Spelling -> Automatic
+  if (qType === "multiple-choice" || qType === "true-false" || qType === "spelling") {
+    const target = String(q.correctAnswer || q.spellingWord || "").trim().toLowerCase();
+    const isCorrect = Boolean(target && textAns.toLowerCase() === target);
+    const score = isCorrect ? maxPoints : 0;
+    return {
+      questionId: q.id,
+      maxPoints,
+      markingMethod: "automatic",
+      autoOrAiScore: score,
+      finalScore: score,
+      isCorrect,
+      aiSuggestionFeedback: isCorrect
+        ? `Automatic Marking: Correct answer ("${textAns}"). Full marks awarded (${maxPoints}/${maxPoints}).`
+        : `Automatic Marking: Student answered "${textAns || "No answer"}", expected "${q.correctAnswer || q.spellingWord}". (0/${maxPoints})`,
+    };
+  }
+
+  // 2. Fill in the Blanks -> Automatic with accepted-answer rules
+  if (qType === "fill-in-blank") {
+    const acceptedList = [
+      ...(q.acceptedAnswers || []),
+      ...(q.correctAnswer ? q.correctAnswer.split(/[|,;]/).map((s) => s.trim()) : []),
+    ]
+      .map((s) => s.trim().toLowerCase().replace(/[.!?]+$/, ""))
+      .filter(Boolean);
+
+    const normalizedStudent = textAns.toLowerCase().replace(/[.!?]+$/, "").trim();
+    const isCorrect = acceptedList.includes(normalizedStudent);
+    const score = isCorrect ? maxPoints : 0;
+    return {
+      questionId: q.id,
+      maxPoints,
+      markingMethod: "automatic-accepted-rules",
+      autoOrAiScore: score,
+      finalScore: score,
+      isCorrect,
+      aiSuggestionFeedback: isCorrect
+        ? `Accepted-Answer Rule Match: "${textAns}" matches accepted answers [${acceptedList.join(", ")}]. (${maxPoints}/${maxPoints})`
+        : `Accepted-Answer Rule Mismatch: "${textAns || "Blank"}" did not match accepted list [${acceptedList.join(", ")}]. Teacher may override if partially valid.`,
+    };
+  }
+
+  // 3. Matching Questions -> Automatic
+  if (qType === "matching") {
+    const pairs = q.matchingPairs || [];
+    if (pairs.length === 0) {
+      return {
+        questionId: q.id,
+        maxPoints,
+        markingMethod: "automatic",
+        autoOrAiScore: maxPoints,
+        finalScore: maxPoints,
+        isCorrect: true,
+        aiSuggestionFeedback: "Automatic Matching: Full marks.",
+      };
+    }
+    const studentMap = rich?.matchingAnswers || {};
+    let correctPairs = 0;
+    pairs.forEach((p) => {
+      if (
+        String(studentMap[p.left] || "").trim().toLowerCase() ===
+        p.right.trim().toLowerCase()
+      ) {
+        correctPairs++;
+      }
+    });
+    const score = Math.round((correctPairs / pairs.length) * maxPoints);
+    const isCorrect = correctPairs === pairs.length;
+    return {
+      questionId: q.id,
+      maxPoints,
+      markingMethod: "automatic",
+      autoOrAiScore: score,
+      finalScore: score,
+      isCorrect,
+      aiSuggestionFeedback: `Automatic Matching: ${correctPairs} of ${pairs.length} pairs matched correctly (${score}/${maxPoints} pts).`,
+    };
+  }
+
+  // 4. Recorded Reading -> AI-Assisted Assessment + Teacher Review
+  if (qType === "recorded-reading") {
+    const hasAudio = Boolean(rich?.voiceRecordingUrl);
+    const transcript = String(rich?.voiceTranscript || textAns || "").trim();
+    const passage = String(q.passageText || q.prompt || "").trim();
+
+    if (!hasAudio && !transcript) {
+      return {
+        questionId: q.id,
+        maxPoints,
+        markingMethod: "ai-assisted-teacher-review",
+        autoOrAiScore: 0,
+        finalScore: 0,
+        aiSuggestionFeedback: "No voice recording or reading transcript submitted yet.",
+      };
+    }
+
+    const targetWords = passage
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .split(/\s+/)
+      .filter(Boolean);
+    const spokenWords = transcript
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, "")
+      .split(/\s+/)
+      .filter(Boolean);
+
+    let ratio = 0.88;
+    if (targetWords.length > 0 && spokenWords.length > 0) {
+      let matched = 0;
+      targetWords.forEach((w) => {
+        if (spokenWords.includes(w)) matched++;
+      });
+      ratio = Math.min(1, Math.max(0.6, matched / targetWords.length));
+    }
+
+    const aiScore = Math.round(maxPoints * ratio);
+    return {
+      questionId: q.id,
+      maxPoints,
+      markingMethod: "ai-assisted-teacher-review",
+      autoOrAiScore: aiScore,
+      finalScore: aiScore,
+      aiSuggestionFeedback: `AI Reading Assessment: Voice recording received (${Math.round(
+        ratio * 100
+      )}% estimated pronunciation & fluency accuracy). Suggested Score: ${aiScore}/${maxPoints}. Teacher can listen and override.`,
+    };
+  }
+
+  // 5. Handwriting / Drawing / Photo Upload -> AI-Assisted + Teacher Review
+  if (qType === "handwriting") {
+    const hasDrawing = Boolean(rich?.drawingDataUrl);
+    const hasPhoto = Boolean(rich?.uploadedImageUrl);
+    const hasText = Boolean(textAns);
+
+    if (!hasDrawing && !hasPhoto && !hasText) {
+      return {
+        questionId: q.id,
+        maxPoints,
+        markingMethod: "ai-assisted-teacher-review",
+        autoOrAiScore: 0,
+        finalScore: 0,
+        aiSuggestionFeedback: "No handwritten photo or canvas drawing submitted.",
+      };
+    }
+
+    const aiScore = Math.round(maxPoints * (hasPhoto || hasDrawing ? 0.9 : 0.75));
+    return {
+      questionId: q.id,
+      maxPoints,
+      markingMethod: "ai-assisted-teacher-review",
+      autoOrAiScore: aiScore,
+      finalScore: aiScore,
+      aiSuggestionFeedback: `AI Handwriting Pre-Check: ${
+        hasPhoto ? "Handwritten worksheet photo uploaded" : "Interactive canvas handwriting submitted"
+      }. Legibility & completion pre-scored at ${aiScore}/${maxPoints}. Awaiting teacher visual verification.`,
+    };
+  }
+
+  // 6. Reading Comprehension & Creative Writing -> AI-Assisted / AI Suggestions + Teacher Review
+  const words = textAns.split(/\s+/).filter(Boolean);
+  const sentences = textAns
+    .split(/[.!?]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const hasCapital = /^[A-Z]/.test(textAns);
+  const hasEndPunct = /[.!?]$/.test(textAns);
+
+  let ratio = 0;
+  if (words.length >= 18) ratio = 0.92;
+  else if (words.length >= 10) ratio = 0.84;
+  else if (words.length >= 4) ratio = 0.68;
+  else if (words.length > 0) ratio = 0.45;
+
+  if (hasCapital && hasEndPunct && ratio > 0) {
+    ratio = Math.min(1, ratio + 0.05);
+  }
+
+  const aiScore = Math.round(maxPoints * ratio);
+  return {
+    questionId: q.id,
+    maxPoints,
+    markingMethod:
+      qType === "reading-comprehension"
+        ? "ai-assisted-teacher-review"
+        : "teacher-with-ai-suggestions",
+    autoOrAiScore: aiScore,
+    finalScore: aiScore,
+    aiSuggestionFeedback: `AI Writing & Comprehension Assistant: ${words.length} words, ${
+      sentences.length
+    } sentence(s). ${
+      hasCapital && hasEndPunct
+        ? "Good capitalization and punctuation."
+        : "Remind student to check capital letters and full stops."
+    } AI Suggested Score: ${aiScore}/${maxPoints} (Teacher can override).`,
+  };
 }
 
 export const DEFAULT_AVATARS = [
@@ -241,132 +615,175 @@ export const WRITING_PROMPTS = [
 export const defaultLmsData: LmsStateData = {
   assignments: [
     {
-      id: "hw-phonics-101",
-      title: "Phonics Blending, Vowel Sounds & Reading Comprehension",
+      id: "hw-phonics-master-101",
+      title: "Comprehensive Phonics, Spelling, Reading Aloud & Handwriting Assignment",
+      subject: "English Phonics & Reading",
+      topic: "Vowel Blends, Sight Words, Voice Reading & Handwriting",
       description:
-        "Complete the objective multiple-choice questions on vowel blends and write two complete sentences using today's vocabulary words.",
+        "Listen to the audio instructions first! Complete the multiple-choice, true/false, fill-in-the-gap, matching, spelling, voice reading, and handwriting/creative writing tasks. You can save your unfinished work anytime.",
+      audioInstructionText:
+        "Welcome to your weekly Phonics and Reading assignment! Read each question carefully. For the spelling question, click the speaker button to hear the word. For the reading question, record your voice reading the short story aloud. You can also draw or upload a photo of your handwritten work!",
       courseName: "English Phonics & Reading",
       grade: "All Grades",
       targetType: "all",
-      dueDate: new Date(Date.now() + 3 * 86400000).toISOString().split("T")[0],
+      dueDate: new Date(Date.now() + 4 * 86400000).toISOString().split("T")[0],
+      scheduledPublishDate: new Date().toISOString().split("T")[0],
+      assignmentStatus: "Published",
       totalPoints: 100,
+      passingScore: 60,
+      allowLateSubmission: true,
+      allowResubmission: true,
+      attachments: [
+        {
+          id: "att-pdf-1",
+          name: "BrightPath_Phonics_Vowel_Blends_Worksheet.pdf",
+          type: "pdf",
+          url: "/logo.png",
+          sizeLabel: "PDF Worksheet • 240 KB",
+        },
+      ],
       createdAt: new Date(Date.now() - 86400000).toISOString(),
       questions: [
         {
           id: "q1",
-          type: "objective",
+          type: "multiple-choice",
+          markingMethod: "automatic",
           prompt: "Which of these words contains a long 'EA' vowel sound as in 'READ'?",
           options: ["Bread", "Dream", "Head", "Heavy"],
           correctAnswer: "Dream",
-          points: 25,
-          skillTag: "Phonics & Reading",
+          points: 10,
+          skillTag: "Phonics & Vowel Blends",
         },
         {
           id: "q2",
-          type: "objective",
-          prompt: "Choose the correct syllable breakdown for the word 'WONDERFUL':",
-          options: ["Wond-erful", "Won-der-ful", "Wo-nder-ful", "Wonder-ful"],
-          correctAnswer: "Won-der-ful",
-          points: 25,
-          skillTag: "Pronunciation & Syllables",
+          type: "true-false",
+          markingMethod: "automatic",
+          prompt: "True or False: The word 'MAGNIFICENT' has 4 syllables (Mag-nif-i-cent).",
+          options: ["True", "False"],
+          correctAnswer: "True",
+          points: 10,
+          skillTag: "Syllable Division",
         },
         {
           id: "q3",
-          type: "objective",
-          prompt: "Which sentence uses correct punctuation and capitalization?",
-          options: [
-            "amina loves reading storybooks every evening",
-            "Amina loves reading storybooks every evening.",
-            "amina Loves reading Storybooks every evening?",
-            "Amina loves reading storybooks every evening",
-          ],
-          correctAnswer: "Amina loves reading storybooks every evening.",
-          points: 25,
-          skillTag: "Writing & Grammar",
+          type: "fill-in-blank",
+          markingMethod: "automatic-accepted-rules",
+          prompt: "Fill in the missing word: Every sentence must begin with a _______ letter and end with a full stop.",
+          correctAnswer: "capital",
+          acceptedAnswers: ["capital", "capitalized", "uppercase", "big"],
+          points: 10,
+          skillTag: "Grammar & Punctuation",
         },
         {
           id: "q4",
-          type: "subjective",
+          type: "matching",
+          markingMethod: "automatic",
+          prompt: "Match each word on the left with its correct meaning or opposite on the right:",
+          matchingPairs: [
+            { left: "Courage", right: "Bravery and confidence" },
+            { left: "Ancient", right: "Very old" },
+            { left: "Generous", right: "Kind and willing to share" },
+          ],
+          points: 15,
+          skillTag: "Vocabulary Building",
+        },
+        {
+          id: "q5",
+          type: "spelling",
+          markingMethod: "automatic",
+          prompt: "Click 'Hear Word to Spell' and type the exact spelling of the word you hear:",
+          spellingWord: "Confidence",
+          correctAnswer: "Confidence",
+          points: 10,
+          skillTag: "Spelling Accuracy",
+        },
+        {
+          id: "q6",
+          type: "reading-comprehension",
+          markingMethod: "ai-assisted-teacher-review",
+          passageText:
+            "Every bright morning, a little golden sunbird flew over the green garden in Abuja. It sang a sweet song and helped the colourful flowers bloom in the warm sunshine.",
           prompt:
-            "Write 2 to 3 complete sentences about your favourite book or story character and explain what lesson you learned from them.",
-          points: 25,
-          skillTag: "Creative Writing",
+            "Based on the short passage above, where did the little golden sunbird fly, and how did it help the garden?",
+          points: 15,
+          skillTag: "Reading Comprehension",
+        },
+        {
+          id: "q7",
+          type: "recorded-reading",
+          markingMethod: "ai-assisted-teacher-review",
+          passageText:
+            "Great speakers stand tall, breathe calmly, and share their ideas with confidence and clarity.",
+          prompt:
+            "Record your voice reading the sentence above aloud clearly:",
+          allowVoiceRecording: true,
+          points: 15,
+          skillTag: "Oral Reading Fluency",
+        },
+        {
+          id: "q8",
+          type: "handwriting",
+          markingMethod: "ai-assisted-teacher-review",
+          prompt:
+            "Write the word 'BRIGHT PATH' neatly on the handwriting canvas below OR upload a clear photo of your handwritten notebook page:",
+          allowDrawing: true,
+          allowImageUpload: true,
+          points: 15,
+          skillTag: "Handwriting & Neatness",
         },
       ],
     },
     {
       id: "hw-math-102",
       title: "Mental Math, Number Patterns & Word Problem Challenge",
+      subject: "Bright Math - Conceptual Mathematics",
+      topic: "Number Sequences, Multiplication & Multi-Step Word Problems",
       description:
-        "Practice rapid mental calculation and explain your step-by-step reasoning for the word problem.",
+        "Practice rapid mental calculation, fill in the missing number, and show your step-by-step working (type, draw on the pad, or upload a photo of your rough work).",
+      audioInstructionText:
+        "Solve each math problem carefully. You can use the drawing pad or upload a picture of your notebook to show your working steps!",
       courseName: "Bright Math - Conceptual Mathematics",
       grade: "All Grades",
       targetType: "all",
       dueDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
+      scheduledPublishDate: new Date().toISOString().split("T")[0],
+      assignmentStatus: "Published",
       totalPoints: 100,
+      passingScore: 65,
+      allowLateSubmission: true,
+      allowResubmission: true,
       createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
       questions: [
         {
           id: "m1",
-          type: "objective",
+          type: "multiple-choice",
+          markingMethod: "automatic",
           prompt: "What number comes next in the pattern: 6, 12, 18, 24, ___?",
           options: ["28", "30", "32", "36"],
           correctAnswer: "30",
           points: 30,
-          skillTag: "Conceptual Math",
+          skillTag: "Number Patterns",
         },
         {
           id: "m2",
-          type: "objective",
-          prompt: "If one notebook costs 450 Naira, how much do 3 notebooks cost?",
-          options: ["1,200 Naira", "1,350 Naira", "1,450 Naira", "900 Naira"],
-          correctAnswer: "1,350 Naira",
-          points: 35,
-          skillTag: "Conceptual Math",
+          type: "fill-in-blank",
+          markingMethod: "automatic-accepted-rules",
+          prompt: "If one notebook costs 450 Naira, how much do 3 notebooks cost in Naira?",
+          correctAnswer: "1350",
+          acceptedAnswers: ["1350", "1,350", "1350 naira", "1,350 naira", "n1350"],
+          points: 30,
+          skillTag: "Multiplication",
         },
         {
           id: "m3",
-          type: "subjective",
+          type: "creative-writing",
+          markingMethod: "teacher-with-ai-suggestions",
           prompt:
-            "Zainab read 14 pages on Monday and 18 pages on Tuesday. If her book has 50 pages in total, how many pages does she have left to read? Show your working steps.",
-          points: 35,
-          skillTag: "Problem Solving",
-        },
-      ],
-    },
-    {
-      id: "hw-speaking-103",
-      title: "Public Speaking Confidence & Vocabulary Builder",
-      description:
-        "Answer the speech structure questions and draft a short 3-sentence opening hook for your next presentation.",
-      courseName: "Public Speaking & Communication",
-      grade: "All Grades",
-      targetType: "all",
-      dueDate: new Date(Date.now() + 4 * 86400000).toISOString().split("T")[0],
-      totalPoints: 100,
-      createdAt: new Date(Date.now() - 3600000 * 6).toISOString(),
-      questions: [
-        {
-          id: "s1",
-          type: "objective",
-          prompt: "What is the best way to begin a persuasive speech?",
-          options: [
-            "Look at the floor and speak very fast",
-            "Start with a strong hook, smile, and make eye contact",
-            "Apologize for being nervous",
-            "Read quietly without looking up",
-          ],
-          correctAnswer: "Start with a strong hook, smile, and make eye contact",
-          points: 50,
-          skillTag: "Public Speaking",
-        },
-        {
-          id: "s2",
-          type: "subjective",
-          prompt:
-            "Write a powerful 3-sentence introduction for a speech titled 'How Young Leaders Can Make Their Community Better'.",
-          points: 50,
-          skillTag: "Speech Writing",
+            "Zainab read 14 pages on Monday and 18 pages on Tuesday. If her book has 50 pages in total, how many pages does she have left to read? Explain your steps or draw your working.",
+          allowDrawing: true,
+          allowImageUpload: true,
+          points: 40,
+          skillTag: "Word Problem Reasoning",
         },
       ],
     },
@@ -380,17 +797,8 @@ export const defaultLmsData: LmsStateData = {
       type: "announcement",
       title: "Welcome to the AI-Powered Student Learning Hub!",
       message:
-        "Explore your daily learning goals, complete interactive homework, and practice reading & pronunciation with your voice-enabled AI Learning Buddy.",
+        "Open your Homework Center to listen to audio instructions, complete interactive questions, draw on the canvas, upload handwritten work, or record your reading aloud!",
       createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    },
-    {
-      id: "notif-hw-1",
-      targetStudentUsername: "ALL",
-      type: "homework",
-      title: "New Homework Assigned: Phonics Blending & Reading Comprehension",
-      message:
-        "Your teacher has assigned a new interactive homework task. Complete it online to earn your Homework Champion badge!",
-      createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
     },
   ],
   progressRecords: {},
@@ -455,4 +863,3 @@ export function getOrCreateStudentProgress(
     updatedAt: new Date().toISOString(),
   };
 }
-
