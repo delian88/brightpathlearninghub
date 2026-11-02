@@ -33,6 +33,8 @@ import {
   PenTool,
   LayoutDashboard,
   Users,
+  Menu,
+  X,
 } from "lucide-react";
 import ToastNotification, { type ToastData, type ToastType } from "@/components/ToastNotification";
 import StudentHomeworkModule from "@/components/StudentHomeworkModule";
@@ -114,6 +116,7 @@ export default function StudentPortalPage() {
   // Navigation & Portal Mode
   const [activeTab, setActiveTab] = useState<PortalTab>("home");
   const [portalRole, setPortalRole] = useState<"student" | "parent">("student");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // LMS State for logged-in student
   const [assignments, setAssignments] = useState<HomeworkAssignment[]>([]);
@@ -907,147 +910,360 @@ export default function StudentPortalPage() {
   }
 
   // ============================================================================
-  // AUTHENTICATED STUDENT & PARENT DASHBOARD
+  // AUTHENTICATED STUDENT & PARENT DASHBOARD (PROFESSIONAL SIDEBAR + TOP NAVBAR)
   // ============================================================================
+  const TAB_META: Record<PortalTab, { title: string; subtitle: string }> = {
+    home: {
+      title: "Student Learning Dashboard",
+      subtitle: "Overview of your classes, daily learning activities, homework, and Bright Buddy AI tutor.",
+    },
+    classes: {
+      title: "My Enrolled Classes & Today's Plan",
+      subtitle: "Join your 1-on-1 live classroom and track your daily learning checklist.",
+    },
+    homework: {
+      title: "Homework & Online Assessments",
+      subtitle: "Complete assigned homework online, draw or upload handwritten work, and view teacher feedback.",
+    },
+    "ai-buddy": {
+      title: "Bright Buddy — AI Voice Learning Companion",
+      subtitle: "Practise reading stories aloud, letter tracing, SuperSpeakers conversation, and interactive math.",
+    },
+    progress: {
+      title: "Academic Development & Competency Tracker",
+      subtitle: "Monitor reading fluency, subject mastery, key strengths, and focus areas.",
+    },
+    results: {
+      title: "My Graded Homework & Assessment Results",
+      subtitle: "Review automatic and teacher-graded scores and detailed question feedback.",
+    },
+    reports: {
+      title: "Official PDF Academic Report Cards",
+      subtitle: "View and download official termly PDF report cards issued by your teacher.",
+    },
+    badges: {
+      title: "Rewards, Achievements & Scholar Badges",
+      subtitle: "Celebrate learning milestones earned from homework, live classes, and Bright Buddy.",
+    },
+    notifications: {
+      title: "Announcements, Reminders & Alerts",
+      subtitle: "Stay updated on new homework assignments, graded work, and teacher messages.",
+    },
+    "parent-monitor": {
+      title: "Parent & Guardian Academic Monitor",
+      subtitle: `Track ${studentAccount.studentName}'s attendance, AI practice sessions, homework scores, and teacher diagnostics.`,
+    },
+  };
+
+  const selectPortalTab = (tab: PortalTab) => {
+    setActiveTab(tab);
+    setSidebarOpen(false);
+    if (tab === "parent-monitor") {
+      setPortalRole("parent");
+    }
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: "#f1f5f9", fontFamily: "var(--font-sans)" }}>
+    <div className="admin-shell">
       <ToastNotification toast={toast} onClose={() => setToast(null)} />
 
-      {/* Top Sticky Portal Header */}
-      <header
-        style={{
-          background: "#071527",
-          color: "#ffffff",
-          padding: "14px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: 12,
-          borderBottom: "3px solid #f59e0b",
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      {/* Mobile Sidebar Backdrop */}
+      <div
+        className={`admin-sidebar-backdrop ${sidebarOpen ? "open" : ""}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      {/* =====================================================================
+          LEFT SIDEBAR NAVIGATION
+          ===================================================================== */}
+      <aside className={`admin-sidebar ${sidebarOpen ? "open" : ""}`}>
+        {/* Brand Header */}
+        <div
+          style={{
+            padding: "20px 18px 16px",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
           <Link
             href="/"
             style={{
-              display: "inline-flex",
+              display: "flex",
               alignItems: "center",
-              gap: 6,
-              color: "#fbbf24",
+              gap: 11,
               textDecoration: "none",
-              fontSize: "0.8rem",
-              fontWeight: 700,
-              padding: "6px 12px",
-              borderRadius: 8,
-              background: "rgba(255,255,255,0.08)",
+              color: "#ffffff",
             }}
           >
-            <ArrowLeft size={15} /> Website
-          </Link>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Image
               src="/logo.png"
               alt="Bright Path Learning Hub"
-              width={38}
-              height={38}
+              width={40}
+              height={40}
               style={{
                 borderRadius: "50%",
-                background: "#fff",
+                background: "#ffffff",
                 padding: 2,
-                border: "2px solid #fbbf24",
+                border: "2px solid #f59e0b",
+                flexShrink: 0,
               }}
             />
             <div>
-              <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2 }}>
-                Bright Path Learning Hub
+              <div style={{ fontWeight: 800, fontSize: "0.95rem", lineHeight: 1.2 }}>
+                Bright Path Hub
               </div>
-              <div style={{ fontSize: "0.72rem", color: "#34d399", fontWeight: 700 }}>
-                {portalRole === "parent"
-                  ? "PARENT ACADEMIC MONITOR PORTAL"
-                  : "STUDENT INTERACTIVE LEARNING PORTAL"}
+              <div
+                style={{
+                  fontSize: "0.68rem",
+                  color: "#34d399",
+                  fontWeight: 700,
+                  marginTop: 2,
+                  letterSpacing: "0.03em",
+                }}
+              >
+                {portalRole === "parent" ? "PARENT MONITOR HUB" : "STUDENT LEARNING HUB"}
               </div>
+            </div>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="admin-mobile-menu-btn"
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              color: "#fff",
+              border: "none",
+              width: 32,
+              height: 32,
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Student Profile Summary Card in Sidebar */}
+        <div
+          style={{
+            margin: "14px 12px 6px",
+            padding: "12px 14px",
+            borderRadius: 14,
+            background: "rgba(255, 255, 255, 0.06)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: "50%",
+              background: currentAvatar.bg,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "1.45rem",
+              border: "2px solid #fbbf24",
+              flexShrink: 0,
+            }}
+          >
+            {currentAvatar.emoji}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              style={{
+                fontWeight: 800,
+                fontSize: "0.88rem",
+                color: "#ffffff",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {studentAccount.studentName}
+            </div>
+            <div style={{ fontSize: "0.7rem", color: "#fbbf24", fontWeight: 700 }}>
+              {studentAccount.username} • {studentAccount.grade}
+            </div>
+            <div
+              style={{
+                fontSize: "0.68rem",
+                color: "#94a3b8",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {studentAccount.courseName}
             </div>
           </div>
         </div>
 
-        {/* Role Switcher (Student vs Parent Monitor) & Sign Out */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <div
-            style={{
-              display: "inline-flex",
-              background: "rgba(255,255,255,0.1)",
-              padding: 4,
-              borderRadius: 10,
-            }}
+        {/* Navigation Links */}
+        <nav style={{ flex: 1, paddingBottom: 16 }}>
+          <div className="admin-nav-section-label">Learning Overview</div>
+          <button
+            type="button"
+            onClick={() => selectPortalTab("home")}
+            className={`admin-nav-item ${activeTab === "home" ? "active" : ""}`}
           >
-            <button
-              type="button"
-              onClick={() => {
-                setPortalRole("student");
-                setActiveTab("home");
-                showToast("Switched to Student Learning Dashboard", "info");
-              }}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 8,
-                border: "none",
-                fontSize: "0.78rem",
-                fontWeight: 800,
-                cursor: "pointer",
-                background: portalRole === "student" ? "#10b981" : "transparent",
-                color: "#ffffff",
-              }}
-            >
-              👨‍🎓 Student View
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPortalRole("parent");
-                setActiveTab("parent-monitor");
-                showToast("Switched to Parent Progress Monitor", "info");
-              }}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 8,
-                border: "none",
-                fontSize: "0.78rem",
-                fontWeight: 800,
-                cursor: "pointer",
-                background: portalRole === "parent" ? "#f59e0b" : "transparent",
-                color: portalRole === "parent" ? "#071527" : "#ffffff",
-              }}
-            >
-              👪 Parent Monitor
-            </button>
-          </div>
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <LayoutDashboard size={17} />
+              <span>Dashboard Home</span>
+            </span>
+          </button>
 
           <button
             type="button"
-            onClick={() => fetchStudentLmsData(studentAccount)}
-            disabled={syncingLms}
+            onClick={() => selectPortalTab("classes")}
+            className={`admin-nav-item ${activeTab === "classes" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <BookOpen size={17} />
+              <span>My Classes & Plan</span>
+            </span>
+            <span className="admin-nav-badge">
+              {(progress?.completedActivityIds || []).length}/{DAILY_ACTIVITIES.length}
+            </span>
+          </button>
+
+          <div className="admin-nav-section-label">Homework & AI Tutor</div>
+          <button
+            type="button"
+            onClick={() => selectPortalTab("homework")}
+            className={`admin-nav-item ${activeTab === "homework" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <FileText size={17} />
+              <span>Homework & Quizzes</span>
+            </span>
+            <span className="admin-nav-badge">{pendingHomework.length}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectPortalTab("ai-buddy")}
+            className={`admin-nav-item ${activeTab === "ai-buddy" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Sparkles size={17} />
+              <span>Bright Buddy AI Tutor</span>
+            </span>
+            <span
+              className="admin-nav-badge"
+              style={{ background: "#10b981", color: "#ffffff" }}
+            >
+              VOICE
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectPortalTab("progress")}
+            className={`admin-nav-item ${activeTab === "progress" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <TrendingUp size={17} />
+              <span>My Progress</span>
+            </span>
+            <span className="admin-nav-badge">{readingProgress}%</span>
+          </button>
+
+          <div className="admin-nav-section-label">Results, Reports & Badges</div>
+          <button
+            type="button"
+            onClick={() => selectPortalTab("results")}
+            className={`admin-nav-item ${activeTab === "results" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <CheckCircle2 size={17} />
+              <span>My Results</span>
+            </span>
+            <span className="admin-nav-badge">{submissions.length}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectPortalTab("reports")}
+            className={`admin-nav-item ${activeTab === "reports" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Download size={17} />
+              <span>PDF Report Cards</span>
+            </span>
+            <span className="admin-nav-badge">{reportCards.length}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectPortalTab("badges")}
+            className={`admin-nav-item ${activeTab === "badges" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Award size={17} />
+              <span>Rewards & Badges</span>
+            </span>
+            <span className="admin-nav-badge">{badgesList.length}</span>
+          </button>
+
+          <div className="admin-nav-section-label">Family & Updates</div>
+          <button
+            type="button"
+            onClick={() => selectPortalTab("notifications")}
+            className={`admin-nav-item ${activeTab === "notifications" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Bell size={17} />
+              <span>Notifications</span>
+            </span>
+            <span className="admin-nav-badge">{notifications.length}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => selectPortalTab("parent-monitor")}
+            className={`admin-nav-item ${activeTab === "parent-monitor" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Users size={17} />
+              <span>Parent Monitor</span>
+            </span>
+          </button>
+        </nav>
+
+        {/* Sidebar Footer */}
+        <div
+          style={{
+            padding: "14px 16px 18px",
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <Link
+            href="/"
             style={{
-              background: "rgba(255,255,255,0.1)",
-              color: "#ffffff",
-              border: "none",
-              padding: "8px 12px",
-              borderRadius: 8,
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
+              display: "flex",
               alignItems: "center",
-              gap: 6,
+              justifyContent: "center",
+              gap: 8,
+              padding: "9px 12px",
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.08)",
+              color: "#e2e8f0",
+              textDecoration: "none",
+              fontSize: "0.8rem",
+              fontWeight: 700,
             }}
           >
-            <RefreshCw size={14} />
-            <span>{syncingLms ? "Syncing..." : "Sync"}</span>
-          </button>
+            <ArrowLeft size={15} /> Back to Public Website
+          </Link>
 
           <button
             type="button"
@@ -1055,341 +1271,519 @@ export default function StudentPortalPage() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 6,
-              background: "rgba(239,68,68,0.2)",
+              justifyContent: "center",
+              gap: 8,
+              padding: "9px 12px",
+              borderRadius: 10,
+              background: "rgba(239, 68, 68, 0.18)",
               color: "#fca5a5",
-              border: "1px solid rgba(239,68,68,0.4)",
-              padding: "8px 14px",
-              borderRadius: 8,
-              fontWeight: 700,
+              border: "1px solid rgba(239, 68, 68, 0.35)",
               fontSize: "0.8rem",
+              fontWeight: 800,
               cursor: "pointer",
             }}
           >
-            <LogOut size={15} /> Sign Out
+            <LogOut size={15} /> Sign Out of Portal
           </button>
         </div>
-      </header>
+      </aside>
 
-      {/* Navigation Pills Bar */}
-      <div
-        style={{
-          background: "#ffffff",
-          borderBottom: "1px solid #e2e8f0",
-          padding: "10px 24px",
-          overflowX: "auto",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1280,
-            margin: "0 auto",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          {[
-            { id: "home", label: "🏠 Dashboard Home" },
-            { id: "classes", label: "📚 My Classes & Today's Learning" },
-            {
-              id: "homework",
-              label: `📝 Homework (${pendingHomework.length} Pending)`,
-            },
-            { id: "ai-buddy", label: "🤖 AI Learning Buddy (Voice Tutor)" },
-            { id: "progress", label: "📈 My Progress" },
-            { id: "results", label: `🎯 My Results (${submissions.length})` },
-            { id: "reports", label: `📄 My Reports (${reportCards.length})` },
-            { id: "badges", label: `🏅 Rewards & Badges (${badgesList.length})` },
-            { id: "notifications", label: `🔔 Notifications (${notifications.length})` },
-            { id: "parent-monitor", label: "👪 Parent Activity Monitor" },
-          ].map((tab) => (
+      {/* =====================================================================
+          MAIN CONTENT WRAPPER + STICKY TOP NAVIGATION BAR (NAVBAR)
+          ===================================================================== */}
+      <div className="admin-main-wrapper">
+        <header className="admin-topbar">
+          {/* Left: Mobile Menu Button + Current Page Title */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <button
-              key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id as PortalTab)}
-              style={{
-                padding: "8px 14px",
-                borderRadius: 10,
-                border: activeTab === tab.id ? "none" : "1px solid #e2e8f0",
-                background:
-                  activeTab === tab.id
-                    ? "linear-gradient(135deg, #0a1931 0%, #133e87 100%)"
-                    : "#f8fafc",
-                color: activeTab === tab.id ? "#ffffff" : "#334155",
-                fontWeight: 700,
-                fontSize: "0.8rem",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
+              onClick={() => setSidebarOpen(true)}
+              className="admin-mobile-menu-btn"
+              aria-label="Open Navigation Menu"
             >
-              {tab.label}
+              <Menu size={20} />
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Content Container */}
-      <main style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 20px 60px" }}>
-        {/* ===================================================================
-            1. WELCOME SECTION (Always visible at top of Home)
-            =================================================================== */}
-        <div
-          style={{
-            background: "linear-gradient(135deg, #071527 0%, #133e87 100%)",
-            color: "#ffffff",
-            borderRadius: 20,
-            padding: "26px 28px",
-            marginBottom: 22,
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 20,
-            boxShadow: "0 15px 35px rgba(7, 21, 39, 0.18)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            {/* Student Profile Picture / Avatar */}
-            <div style={{ position: "relative" }}>
-              <div
-                style={{
-                  width: 78,
-                  height: 78,
-                  borderRadius: "50%",
-                  background: currentAvatar.bg,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "2.4rem",
-                  border: "3px solid #fbbf24",
-                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
-                }}
-              >
-                {currentAvatar.emoji}
-              </div>
-            </div>
-
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h1 style={{ margin: 0, fontSize: "1.12rem", fontWeight: 900, color: "#0f172a" }}>
+                  {TAB_META[activeTab].title}
+                </h1>
                 <span
                   style={{
-                    background: "rgba(16, 185, 129, 0.22)",
-                    color: "#34d399",
-                    padding: "4px 12px",
+                    background: portalRole === "parent" ? "#fef3c7" : "#ecfdf5",
+                    color: portalRole === "parent" ? "#b45309" : "#059669",
+                    padding: "2px 9px",
                     borderRadius: 999,
-                    fontSize: "0.72rem",
+                    fontSize: "0.68rem",
                     fontWeight: 800,
                   }}
                 >
-                  ID: {studentAccount.username}
-                </span>
-                <span
-                  style={{
-                    background: "rgba(251, 191, 36, 0.2)",
-                    color: "#fbbf24",
-                    padding: "4px 12px",
-                    borderRadius: 999,
-                    fontSize: "0.72rem",
-                    fontWeight: 800,
-                  }}
-                >
-                  {studentAccount.grade} • {currentAvatar.label}
+                  {portalRole === "parent" ? "PARENT MODE" : "STUDENT MODE"}
                 </span>
               </div>
-
-              <h1 style={{ fontSize: "1.65rem", fontWeight: 800, margin: "8px 0 4px", color: "#ffffff" }}>
-                Welcome back, {studentAccount.studentName}! 👋
-              </h1>
-              <p style={{ margin: 0, color: "#cbd5e1", fontSize: "0.88rem" }}>
-                Enrolled Course: <strong style={{ color: "#fbbf24" }}>{studentAccount.courseName}</strong> • Parent/Guardian: {studentAccount.parentName}
+              <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                {TAB_META[activeTab].subtitle}
               </p>
-
-              {/* Quick Avatar Switcher */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
-                <span style={{ fontSize: "0.72rem", color: "#94a3b8", fontWeight: 700 }}>
-                  Choose Avatar:
-                </span>
-                {DEFAULT_AVATARS.map((av) => (
-                  <button
-                    key={av.id}
-                    type="button"
-                    onClick={() => handleSelectAvatar(av.id)}
-                    title={av.label}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: "50%",
-                      border:
-                        currentAvatar.id === av.id
-                          ? "2px solid #fbbf24"
-                          : "1px solid rgba(255,255,255,0.2)",
-                      background: av.bg,
-                      cursor: "pointer",
-                      fontSize: "0.95rem",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {av.emoji}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {/* Center/Right: Top Navbar Quick Links + Role Switcher + Actions */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {/* Top Navbar Quick Links */}
+            <nav
+              aria-label="Portal Top Navigation"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                background: "#f1f5f9",
+                padding: 4,
+                borderRadius: 10,
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              {[
+                { id: "home", label: "Overview" },
+                { id: "homework", label: `Homework (${pendingHomework.length})` },
+                { id: "ai-buddy", label: "Bright Buddy AI" },
+                { id: "reports", label: "Reports" },
+              ].map((navItem) => {
+                const isAct = activeTab === navItem.id;
+                return (
+                  <button
+                    key={navItem.id}
+                    type="button"
+                    onClick={() => selectPortalTab(navItem.id as PortalTab)}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      border: "none",
+                      background: isAct ? "#0f172a" : "transparent",
+                      color: isAct ? "#ffffff" : "#475569",
+                      fontSize: "0.76rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {navItem.label}
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Student vs Parent Role Switcher */}
+            <div
+              style={{
+                display: "inline-flex",
+                background: "#f1f5f9",
+                padding: 4,
+                borderRadius: 10,
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setPortalRole("student");
+                  setActiveTab("home");
+                  showToast("Switched to Student Learning Dashboard", "info");
+                }}
+                style={{
+                  padding: "6px 11px",
+                  borderRadius: 7,
+                  border: "none",
+                  fontSize: "0.75rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  background: portalRole === "student" ? "#10b981" : "transparent",
+                  color: portalRole === "student" ? "#ffffff" : "#475569",
+                }}
+              >
+                👨‍🎓 Student
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPortalRole("parent");
+                  setActiveTab("parent-monitor");
+                  showToast("Switched to Parent Progress Monitor", "info");
+                }}
+                style={{
+                  padding: "6px 11px",
+                  borderRadius: 7,
+                  border: "none",
+                  fontSize: "0.75rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  background: portalRole === "parent" ? "#f59e0b" : "transparent",
+                  color: portalRole === "parent" ? "#071527" : "#475569",
+                }}
+              >
+                👪 Parent
+              </button>
+            </div>
+
+            {/* Notification Bell */}
             <button
               type="button"
-              onClick={() => setActiveTab("ai-buddy")}
+              onClick={() => selectPortalTab("notifications")}
+              title="Notifications"
               style={{
-                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                color: "#ffffff",
-                border: "none",
-                padding: "12px 20px",
-                borderRadius: 12,
+                position: "relative",
+                background: "#f8fafc",
+                border: "1px solid #cbd5e1",
+                borderRadius: 10,
+                width: 36,
+                height: 36,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                color: "#0f172a",
+              }}
+            >
+              <Bell size={16} />
+              {notifications.length > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -4,
+                    background: "#ef4444",
+                    color: "#fff",
+                    fontSize: "0.62rem",
+                    fontWeight: 900,
+                    width: 17,
+                    height: 17,
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {notifications.length}
+                </span>
+              )}
+            </button>
+
+            {/* Sync Button */}
+            <button
+              type="button"
+              onClick={() => fetchStudentLmsData(studentAccount)}
+              disabled={syncingLms}
+              style={{
+                background: "#f8fafc",
+                color: "#0f172a",
+                border: "1px solid #cbd5e1",
+                padding: "7px 12px",
+                borderRadius: 10,
+                fontSize: "0.76rem",
                 fontWeight: 800,
-                fontSize: "0.88rem",
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 8,
-                boxShadow: "0 8px 20px rgba(16, 185, 129, 0.3)",
+                gap: 6,
               }}
             >
-              <Sparkles size={18} />
-              <span>Open AI Learning Buddy</span>
+              <RefreshCw size={14} />
+              <span>{syncingLms ? "Syncing..." : "Sync"}</span>
             </button>
 
-            <a
-              href={
-                studentAccount.classLink ||
-                `https://wa.me/2348063202616?text=Hi%20Bright%20Path!%20Student%20${encodeURIComponent(
-                  studentAccount.studentName
-                )}%20(${encodeURIComponent(studentAccount.username)})%20is%20ready%20for%20the%20live%201:1%20session.`
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-primary shining"
-              style={{ padding: "12px 20px", borderRadius: 12, fontSize: "0.88rem" }}
-            >
-              <Video size={18} />
-              <span>Join 1:1 Live Class</span>
-            </a>
-          </div>
-        </div>
-
-        {/* ===================================================================
-            DASHBOARD STATISTICS (7 Key Metrics Required)
-            =================================================================== */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(165px, 1fr))",
-            gap: 14,
-            marginBottom: 24,
-          }}
-        >
-          {[
-            {
-              label: "Total Lessons Completed",
-              value: `${lessonsCompleted} / ${progress?.totalLessons || 24}`,
-              sub: "1-on-1 Live & AI Modules",
-              color: "#1d4ed8",
-              bg: "#eff6ff",
-            },
-            {
-              label: "Homework Completion",
-              value: `${hwCompletionRate}%`,
-              sub: `${submissions.length} of ${assignments.length} Submitted`,
-              color: "#059669",
-              bg: "#ecfdf5",
-            },
-            {
-              label: "Average Assessment Score",
-              value: `${avgAssessmentScore}%`,
-              sub: "Auto & Teacher Graded",
-              color: "#7c3aed",
-              bg: "#f5f3ff",
-            },
-            {
-              label: "Reading Progress",
-              value: `${readingProgress}%`,
-              sub: "Phonics & Pronunciation",
-              color: "#0284c7",
-              bg: "#e0f2fe",
-            },
-            {
-              label: "Attendance Rate",
-              value: `${attendanceRate}%`,
-              sub: "1:1 Live Classroom",
-              color: "#10b981",
-              bg: "#d1fae5",
-            },
-            {
-              label: "Learning Hours",
-              value: `${learningHours} hrs`,
-              sub: "Active Study Time",
-              color: "#d97706",
-              bg: "#fef3c7",
-            },
-            {
-              label: "Badges Earned",
-              value: `${badgesList.length}`,
-              sub: "Academic Rewards",
-              color: "#e11d48",
-              bg: "#ffe4e6",
-            },
-          ].map((stat, idx) => (
-            <div
-              key={idx}
+            {/* Sign Out Button */}
+            <button
+              type="button"
+              onClick={handleLogout}
               style={{
-                background: "#ffffff",
-                borderRadius: 16,
-                padding: "16px",
-                border: "1px solid #e2e8f0",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "#fef2f2",
+                color: "#dc2626",
+                border: "1px solid #fecaca",
+                padding: "7px 12px",
+                borderRadius: 10,
+                fontWeight: 800,
+                fontSize: "0.76rem",
+                cursor: "pointer",
               }}
             >
-              <div
-                style={{
-                  fontSize: "0.72rem",
-                  fontWeight: 800,
-                  color: "#64748b",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                }}
-              >
-                {stat.label}
+              <LogOut size={14} /> Sign Out
+            </button>
+          </div>
+        </header>
+
+        {/* Main Content Container */}
+        <main style={{ maxWidth: 1320, width: "100%", margin: "0 auto", padding: "24px 24px 60px" }}>
+          {/* ===================================================================
+              1. WELCOME HERO BANNER
+              =================================================================== */}
+          <div
+            style={{
+              background: "linear-gradient(135deg, #071527 0%, #133e87 65%, #0f766e 100%)",
+              color: "#ffffff",
+              borderRadius: 20,
+              padding: "24px 28px",
+              marginBottom: 22,
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 20,
+              boxShadow: "0 14px 32px rgba(7, 21, 39, 0.15)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+              {/* Student Profile Picture / Avatar */}
+              <div style={{ position: "relative" }}>
+                <div
+                  style={{
+                    width: 74,
+                    height: 74,
+                    borderRadius: "50%",
+                    background: currentAvatar.bg,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "2.3rem",
+                    border: "3px solid #fbbf24",
+                    boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                  }}
+                >
+                  {currentAvatar.emoji}
+                </div>
               </div>
-              <div
-                style={{
-                  fontSize: "1.65rem",
-                  fontWeight: 800,
-                  color: stat.color,
-                  margin: "6px 0 4px",
-                }}
-              >
-                {stat.value}
-              </div>
-              <div
-                style={{
-                  display: "inline-block",
-                  background: stat.bg,
-                  color: stat.color,
-                  fontSize: "0.7rem",
-                  fontWeight: 700,
-                  padding: "2px 8px",
-                  borderRadius: 999,
-                }}
-              >
-                {stat.sub}
+
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span
+                    style={{
+                      background: "rgba(16, 185, 129, 0.22)",
+                      color: "#6ee7b7",
+                      border: "1px solid rgba(16, 185, 129, 0.35)",
+                      padding: "3px 11px",
+                      borderRadius: 999,
+                      fontSize: "0.71rem",
+                      fontWeight: 800,
+                    }}
+                  >
+                    ID: {studentAccount.username}
+                  </span>
+                  <span
+                    style={{
+                      background: "rgba(251, 191, 36, 0.2)",
+                      color: "#fde68a",
+                      border: "1px solid rgba(251, 191, 36, 0.35)",
+                      padding: "3px 11px",
+                      borderRadius: 999,
+                      fontSize: "0.71rem",
+                      fontWeight: 800,
+                    }}
+                  >
+                    {studentAccount.grade} • {currentAvatar.label}
+                  </span>
+                </div>
+
+                <h2 style={{ fontSize: "1.55rem", fontWeight: 900, margin: "6px 0 4px", color: "#ffffff" }}>
+                  Welcome back, {studentAccount.studentName}! 👋
+                </h2>
+                <p style={{ margin: 0, color: "#e2e8f0", fontSize: "0.86rem" }}>
+                  Enrolled Course: <strong style={{ color: "#fbbf24" }}>{studentAccount.courseName}</strong> • Parent/Guardian: {studentAccount.parentName}
+                </p>
+
+                {/* Quick Avatar Switcher */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
+                  <span style={{ fontSize: "0.72rem", color: "#cbd5e1", fontWeight: 700 }}>
+                    Choose Avatar:
+                  </span>
+                  {DEFAULT_AVATARS.map((av) => (
+                    <button
+                      key={av.id}
+                      type="button"
+                      onClick={() => handleSelectAvatar(av.id)}
+                      title={av.label}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        border:
+                          currentAvatar.id === av.id
+                            ? "2px solid #fbbf24"
+                            : "1px solid rgba(255,255,255,0.2)",
+                        background: av.bg,
+                        cursor: "pointer",
+                        fontSize: "0.95rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {av.emoji}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          ))}
-        </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => selectPortalTab("ai-buddy")}
+                style={{
+                  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                  color: "#ffffff",
+                  border: "none",
+                  padding: "11px 18px",
+                  borderRadius: 12,
+                  fontWeight: 800,
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  boxShadow: "0 8px 20px rgba(16, 185, 129, 0.3)",
+                }}
+              >
+                <Sparkles size={17} />
+                <span>Open Bright Buddy AI</span>
+              </button>
+
+              <a
+                href={
+                  studentAccount.classLink ||
+                  `https://wa.me/2348063202616?text=Hi%20Bright%20Path!%20Student%20${encodeURIComponent(
+                    studentAccount.studentName
+                  )}%20(${encodeURIComponent(studentAccount.username)})%20is%20ready%20for%20the%20live%201:1%20session.`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-primary shining"
+                style={{ padding: "11px 18px", borderRadius: 12, fontSize: "0.85rem" }}
+              >
+                <Video size={17} />
+                <span>Join 1:1 Live Class</span>
+              </a>
+            </div>
+          </div>
+
+          {/* ===================================================================
+              DASHBOARD STATISTICS (7 Professional KPI Cards)
+              =================================================================== */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+              gap: 14,
+              marginBottom: 24,
+            }}
+          >
+            {[
+              {
+                label: "Total Lessons Completed",
+                value: `${lessonsCompleted} / ${progress?.totalLessons || 24}`,
+                sub: "1-on-1 Live & AI Modules",
+                color: "#1d4ed8",
+                bg: "#eff6ff",
+                border: "#bfdbfe",
+              },
+              {
+                label: "Homework Completion",
+                value: `${hwCompletionRate}%`,
+                sub: `${submissions.length} of ${assignments.length} Submitted`,
+                color: "#059669",
+                bg: "#ecfdf5",
+                border: "#a7f3d0",
+              },
+              {
+                label: "Average Assessment Score",
+                value: `${avgAssessmentScore}%`,
+                sub: "Auto & Teacher Graded",
+                color: "#7c3aed",
+                bg: "#f5f3ff",
+                border: "#ddd6fe",
+              },
+              {
+                label: "Reading Progress",
+                value: `${readingProgress}%`,
+                sub: "Phonics & Pronunciation",
+                color: "#0284c7",
+                bg: "#e0f2fe",
+                border: "#bae6fd",
+              },
+              {
+                label: "Attendance Rate",
+                value: `${attendanceRate}%`,
+                sub: "1:1 Live Classroom",
+                color: "#047857",
+                bg: "#d1fae5",
+                border: "#6ee7b7",
+              },
+              {
+                label: "Learning Hours",
+                value: `${learningHours} hrs`,
+                sub: "Active Study Time",
+                color: "#d97706",
+                bg: "#fef3c7",
+                border: "#fde68a",
+              },
+              {
+                label: "Badges Earned",
+                value: `${badgesList.length}`,
+                sub: "Academic Rewards",
+                color: "#e11d48",
+                bg: "#ffe4e6",
+                border: "#fecdd3",
+              },
+            ].map((stat, idx) => (
+              <div
+                key={idx}
+                className="admin-kpi-card"
+                style={{
+                  padding: "16px 18px",
+                  flexDirection: "column",
+                  gap: 6,
+                  borderTop: `3px solid ${stat.color}`,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "0.7rem",
+                    fontWeight: 800,
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  {stat.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: "1.6rem",
+                    fontWeight: 900,
+                    color: stat.color,
+                    lineHeight: 1.15,
+                  }}
+                >
+                  {stat.value}
+                </div>
+                <div
+                  style={{
+                    display: "inline-block",
+                    background: stat.bg,
+                    color: stat.color,
+                    border: `1px solid ${stat.border}`,
+                    fontSize: "0.69rem",
+                    fontWeight: 800,
+                    padding: "2px 9px",
+                    borderRadius: 999,
+                    width: "fit-content",
+                  }}
+                >
+                  {stat.sub}
+                </div>
+              </div>
+            ))}
+          </div>
 
         {/* ===================================================================
             TAB: HOME OVERVIEW (Shows all 10 Dashboard Components in one view)
@@ -2626,6 +3020,7 @@ export default function StudentPortalPage() {
           </div>
         )}
       </main>
+      </div>
     </div>
   );
 }
