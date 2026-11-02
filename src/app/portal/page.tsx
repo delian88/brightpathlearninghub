@@ -950,7 +950,7 @@ export default function StudentPortalPage() {
                   cursor: "pointer",
                 }}
               >
-                ✨ Launch Interactive Demo Student Account (Zainab • Grade 2)
+                Launch Interactive Demo Student Account (Zainab • Grade 2)
               </button>
             </div>
           </div>
@@ -1204,7 +1204,7 @@ export default function StudentPortalPage() {
             className={`admin-nav-item ${activeTab === "ai-buddy" ? "active" : ""}`}
           >
             <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Sparkles size={17} />
+              <Mic size={17} />
               <span>Bright Buddy AI Tutor</span>
             </span>
             <span
@@ -1712,7 +1712,7 @@ export default function StudentPortalPage() {
                   boxShadow: "0 8px 20px rgba(16, 185, 129, 0.3)",
                 }}
               >
-                <Sparkles size={17} />
+                <Mic size={17} />
                 <span>Open Bright Buddy AI</span>
               </button>
 

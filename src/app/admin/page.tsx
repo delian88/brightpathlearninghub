@@ -1205,7 +1205,7 @@ function AdminDashboardInner() {
 
           {[
             { id: "cms-general", label: "General & Footer", icon: <Globe size={16} /> },
-            { id: "cms-hero", label: "Hero Banner", icon: <Sparkles size={16} /> },
+            { id: "cms-hero", label: "Hero Banner", icon: <LayoutDashboard size={16} /> },
             { id: "cms-benefits", label: "4 Key Benefits", icon: <Award size={16} /> },
             { id: "cms-courses", label: "Flagship Courses", icon: <BookOpen size={16} /> },
             { id: "cms-why", label: "Why Bright Path", icon: <CheckCircle2 size={16} /> },

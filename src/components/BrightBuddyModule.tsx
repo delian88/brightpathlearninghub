@@ -1216,7 +1216,7 @@ export default function BrightBuddyModule({
                   cursor: "pointer",
                 }}
               >
-                ✨ Check My Reading
+                Check My Reading
               </button>
 
               {/* Interactive Demo Button for the exact "sitting" struggle scenario */}
@@ -2375,7 +2375,7 @@ export default function BrightBuddyModule({
                     cursor: "pointer",
                   }}
                 >
-                  ✨ Check My Writing
+                  Check My Writing
                 </button>
                 {guidedWritingFeedback && (
                   <div style={{ marginTop: 8, fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
@@ -2552,7 +2552,7 @@ export default function BrightBuddyModule({
                     cursor: "pointer",
                   }}
                 >
-                  ✨ Evaluate My Spoken Reply
+                  Evaluate My Spoken Reply
                 </button>
                 <button
                   type="button"
@@ -2827,7 +2827,7 @@ export default function BrightBuddyModule({
                     cursor: "pointer",
                   }}
                 >
-                  ✨ Get SuperSpeakers Feedback
+                  Get SuperSpeakers Feedback
                 </button>
               </div>
               <textarea
