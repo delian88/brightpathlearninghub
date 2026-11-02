@@ -476,6 +476,26 @@ export interface PortalCalendarEvent {
     | "School Event";
   description: string;
   targetStudentUsername: string; // "ALL" or specific student username
+  emailNotificationSent?: boolean;
+  createdAt: string;
+}
+
+export interface AdminSystemUser {
+  id: string;
+  name: string;
+  email: string;
+  role: "super_admin" | "admin" | "teacher" | "support";
+  status: "active" | "inactive";
+  permissions: {
+    canManageHomework: boolean;
+    canManageProgress: boolean;
+    canManageReports: boolean;
+    canManageCampus: boolean;
+    canManageCMS: boolean;
+    canManageUsers: boolean;
+  };
+  phone?: string;
+  lastLogin?: string;
   createdAt: string;
 }
 
@@ -499,6 +519,7 @@ export interface LmsStateData {
   messages?: PortalDirectMessage[];
   supportTickets?: SupportTicketItem[];
   calendarEvents?: PortalCalendarEvent[];
+  adminUsers?: AdminSystemUser[];
 }
 
 export const QUESTION_TYPE_LABELS: Record<

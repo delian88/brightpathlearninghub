@@ -4,6 +4,7 @@ import AdminDashboardPage from "../page";
 export function generateStaticParams() {
   return [
     { section: "overview" },
+    { section: "users" },
     { section: "bookings" },
     { section: "credentials" },
     { section: "leads" },

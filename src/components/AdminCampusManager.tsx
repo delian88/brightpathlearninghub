@@ -72,6 +72,9 @@ export default function AdminCampusManager({ section, lmsData, students, onRefre
   const [url, setUrl] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("Present");
+  const [sendCalendarEmail, setSendCalendarEmail] = useState(true);
+  const [calendarViewMode, setCalendarViewMode] = useState<"calendar" | "list">("calendar");
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState(() => new Date());
   const [replies, setReplies] = useState<Record<string, string>>({});
 
   const nameOf = (u: string) => students.find((s) => s.username === u)?.studentName || u;
@@ -531,49 +534,250 @@ export default function AdminCampusManager({ section, lmsData, students, onRefre
 
       {tab === "calendar" && (
         <>
-          <div style={grid}>
-            {targetSelect(true)}
-            {input("Title", text, setText)}
-            {input("Date", date, setDate, "date")}
-            <div className="form-group">
-              <label className="form-label">Category</label>
-              <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="School Event">School Event</option>
-                <option value="Homework Deadline">Homework Deadline</option>
-                <option value="Examination / Assessment">Examination / Assessment</option>
-                <option value="Live Class">Live Class</option>
-              </select>
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 14, padding: 18, marginBottom: 20 }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: "0.98rem", fontWeight: 800, color: "#0f172a" }}>
+              🗓️ Schedule New Event & Email Alert
+            </h3>
+            <div style={grid}>
+              {targetSelect(true)}
+              {input("Title", text, setText, "text", "e.g. End of Term Phonics Assessment")}
+              {input("Date", date, setDate, "date")}
+              <div className="form-group">
+                <label className="form-label">Category</label>
+                <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
+                  <option value="School Event">School Event</option>
+                  <option value="Homework Deadline">Homework Deadline</option>
+                  <option value="Examination / Assessment">Examination / Assessment</option>
+                  <option value="Live Class">Live Class</option>
+                </select>
+              </div>
+              {input("Description / Notes", text2, setText2, "text", "Optional details sent in email alert")}
             </div>
-            {input("Description", text2, setText2)}
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0 14px" }}>
+              <input
+                type="checkbox"
+                id="sendCalendarEmailCheckbox"
+                checked={sendCalendarEmail}
+                onChange={(e) => setSendCalendarEmail(e.target.checked)}
+                style={{ width: 17, height: 17, cursor: "pointer", accentColor: "#0284c7" }}
+              />
+              <label htmlFor="sendCalendarEmailCheckbox" style={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e293b", cursor: "pointer" }}>
+                📧 Send automatic email notification to {target === "ALL" ? "all student parent emails" : `${nameOf(target)}'s parent`} & admin
+              </label>
+            </div>
+
+            <button
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() => {
+                if (!text.trim()) {
+                  showToast("Enter an event title.", "warning");
+                  return;
+                }
+                post({
+                  action: "save-calendar-event",
+                  title: text,
+                  date,
+                  category: category || "School Event",
+                  description: text2,
+                  targetStudentUsername: target,
+                  sendEmailNotification: sendCalendarEmail,
+                });
+              }}
+            >
+              {sendCalendarEmail ? "Schedule Event & Send Email Alerts" : "Schedule Event"}
+            </button>
           </div>
-          <button
-            className="btn btn-primary"
-            disabled={busy}
-            onClick={() => {
-              if (!text.trim()) {
-                showToast("Enter an event title.", "warning");
-                return;
-              }
-              post({
-                action: "save-calendar-event",
-                title: text,
-                date,
-                category: category || "School Event",
-                description: text2,
-                targetStudentUsername: target,
-              });
-            }}
-          >
-            Add Event
-          </button>
-          <div style={{ display: "grid", gap: 8, marginTop: 16 }}>
-            {(lmsData.calendarEvents || []).length === 0 && empty("No calendar events yet.")}
+
+          {/* Interactive Monthly Visual Calendar Grid */}
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18, marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ padding: "4px 12px", fontSize: "0.8rem" }}
+                  onClick={() => {
+                    const prev = new Date(currentCalendarMonth);
+                    prev.setMonth(prev.getMonth() - 1);
+                    setCurrentCalendarMonth(prev);
+                  }}
+                >
+                  ← Prev Month
+                </button>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "#0f172a" }}>
+                  {currentCalendarMonth.toLocaleString("default", { month: "long", year: "numeric" })}
+                </h3>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ padding: "4px 12px", fontSize: "0.8rem" }}
+                  onClick={() => {
+                    const next = new Date(currentCalendarMonth);
+                    next.setMonth(next.getMonth() + 1);
+                    setCurrentCalendarMonth(next);
+                  }}
+                >
+                  Next Month →
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setCalendarViewMode("calendar")}
+                  className={calendarViewMode === "calendar" ? "btn btn-primary" : "btn btn-outline"}
+                  style={{ padding: "4px 12px", fontSize: "0.78rem" }}
+                >
+                  📅 Monthly Grid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCalendarViewMode("list")}
+                  className={calendarViewMode === "list" ? "btn btn-primary" : "btn btn-outline"}
+                  style={{ padding: "4px 12px", fontSize: "0.78rem" }}
+                >
+                  📋 List View ({lmsData.calendarEvents?.length || 0})
+                </button>
+              </div>
+            </div>
+
+            {calendarViewMode === "calendar" ? (
+              (() => {
+                const year = currentCalendarMonth.getFullYear();
+                const month = currentCalendarMonth.getMonth();
+                const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 is Sun
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const todayStr = new Date().toISOString().split("T")[0];
+
+                const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                const calendarCells = [];
+
+                // Empty padding days before day 1
+                for (let i = 0; i < firstDayOfMonth; i++) {
+                  calendarCells.push(<div key={`empty-${i}`} style={{ minHeight: 90, background: "#f8fafc", border: "1px solid #f1f5f9", borderRadius: 8 }} />);
+                }
+
+                // Days of current month
+                for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+                  const dayString = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+                  const dayEvents = (lmsData.calendarEvents || []).filter((e) => e.date === dayString);
+                  const isToday = dayString === todayStr;
+
+                  calendarCells.push(
+                    <div
+                      key={`day-${dayNum}`}
+                      onClick={() => setDate(dayString)}
+                      style={{
+                        minHeight: 90,
+                        background: isToday ? "#eff6ff" : "#ffffff",
+                        border: isToday ? "2px solid #0284c7" : "1px solid #e2e8f0",
+                        borderRadius: 8,
+                        padding: 6,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontWeight: 800, fontSize: "0.82rem", color: isToday ? "#0284c7" : "#334155" }}>
+                          {dayNum}
+                        </span>
+                        {isToday && (
+                          <span style={{ fontSize: "0.65rem", fontWeight: 800, background: "#0284c7", color: "#ffffff", padding: "1px 5px", borderRadius: 999 }}>
+                            TODAY
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3, overflowY: "auto", maxHeight: 75 }}>
+                        {dayEvents.map((ev) => {
+                          const badgeColor =
+                            ev.category === "Examination / Assessment"
+                              ? "#ef4444"
+                              : ev.category === "Homework Deadline"
+                              ? "#f59e0b"
+                              : ev.category === "Live Class"
+                              ? "#10b981"
+                              : "#6366f1";
+                          return (
+                            <div
+                              key={ev.id}
+                              title={`${ev.title} (${ev.category}) - ${ev.description || ""}`}
+                              style={{
+                                background: `${badgeColor}15`,
+                                borderLeft: `3px solid ${badgeColor}`,
+                                padding: "2px 5px",
+                                borderRadius: 4,
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                color: "#0f172a",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {ev.title}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 6, textAlign: "center" }}>
+                      {dayLabels.map((lbl) => (
+                        <div key={lbl} style={{ fontWeight: 800, fontSize: "0.75rem", color: "#64748b", textTransform: "uppercase" }}>
+                          {lbl}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
+                      {calendarCells}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : null}
+          </div>
+
+          <div style={{ display: "grid", gap: 8 }}>
+            <h4 style={{ margin: "10px 0 4px", fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+              📋 All Scheduled Events ({lmsData.calendarEvents?.length || 0})
+            </h4>
+            {(lmsData.calendarEvents || []).length === 0 && empty("No calendar events scheduled yet.")}
             {(lmsData.calendarEvents || []).map((e) => (
               <div key={e.id} style={row}>
-                <span>
-                  {e.date} · <b>{e.title}</b> · {e.category} ·{" "}
-                  {e.targetStudentUsername === "ALL" ? "All students" : nameOf(e.targetStudentUsername)}
-                </span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 800, color: "#0f172a" }}>{e.title}</span>
+                    <span style={{ background: "#e0f2fe", color: "#0369a1", fontSize: "0.7rem", fontWeight: 800, padding: "2px 8px", borderRadius: 999 }}>
+                      {e.category}
+                    </span>
+                    <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                      📅 {e.date}
+                    </span>
+                    <span style={{ fontSize: "0.75rem", color: "#059669", fontWeight: 700 }}>
+                      👤 {e.targetStudentUsername === "ALL" ? "All students & parents" : nameOf(e.targetStudentUsername)}
+                    </span>
+                    {e.emailNotificationSent && (
+                      <span style={{ fontSize: "0.7rem", background: "#ecfdf5", color: "#059669", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>
+                        ✉️ Email Sent
+                      </span>
+                    )}
+                  </div>
+                  {e.description && (
+                    <div style={{ fontSize: "0.78rem", color: "#475569", marginTop: 2 }}>
+                      {e.description}
+                    </div>
+                  )}
+                </div>
                 {del("delete-calendar-event", "eventId", e.id)}
               </div>
             ))}

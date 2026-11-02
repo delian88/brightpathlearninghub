@@ -49,9 +49,11 @@ import { defaultLmsData, type LmsStateData } from "@/lib/lmsData";
 import ToastNotification, { type ToastData, type ToastType } from "@/components/ToastNotification";
 import AdminLmsManager from "@/components/AdminLmsManager";
 import AdminCampusManager, { CAMPUS_TABS, type CampusTab } from "@/components/AdminCampusManager";
+import AdminUserManagement from "@/components/AdminUserManagement";
 
 type ActiveView =
   | "overview"
+  | "users"
   | "bookings"
   | "credentials"
   | "leads"
@@ -79,6 +81,7 @@ type ActiveView =
 
 const VIEW_TO_PATH: Record<ActiveView, string> = {
   overview: "/admin",
+  users: "/admin/users",
   bookings: "/admin/bookings",
   credentials: "/admin/credentials",
   leads: "/admin/leads",
@@ -107,6 +110,8 @@ const VIEW_TO_PATH: Record<ActiveView, string> = {
 
 const SLUG_TO_VIEW: Record<string, ActiveView> = {
   overview: "overview",
+  users: "users",
+  "admin-users": "users",
   bookings: "bookings",
   credentials: "credentials",
   leads: "leads",
@@ -657,6 +662,10 @@ function AdminDashboardInner() {
       title: "Executive Dashboard Overview",
       subtitle: "Real-time summary of demo bookings, student credentials, leads, and website CMS.",
     },
+    users: {
+      title: "User Management & Role Permissions",
+      subtitle: "Add and manage teachers, staff, administrators and configure granular permissions.",
+    },
     bookings: {
       title: "1:1 Demo Class Bookings",
       subtitle: "Review bookings, confirm sessions, send HTML confirmation emails, and generate student accounts.",
@@ -1191,6 +1200,16 @@ function AdminDashboardInner() {
             <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <LayoutDashboard size={17} /> Dashboard Overview
             </span>
+          </button>
+
+          <button
+            onClick={() => switchView("users")}
+            className={`admin-nav-item ${activeView === "users" ? "active" : ""}`}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Users size={17} /> Users & Roles
+            </span>
+            <span className="admin-nav-badge">{lmsData.adminUsers?.length || 2}</span>
           </button>
 
           <button
@@ -1842,6 +1861,17 @@ function AdminDashboardInner() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* =================================================================
+              USER MANAGEMENT & ROLE PERMISSIONS
+              ================================================================= */}
+          {activeView === "users" && (
+            <AdminUserManagement
+              lmsData={lmsData}
+              onRefresh={() => fetchData(false)}
+              showToast={showToast}
+            />
           )}
 
           {/* =================================================================

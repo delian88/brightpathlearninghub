@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getLmsData, saveLmsData } from "@/db";
+import { getLmsData, saveLmsData, getStudentAccounts } from "@/db";
 import {
   getOrCreateStudentProgress,
   evaluateHomeworkQuestion,
@@ -14,8 +14,9 @@ import {
   type PortalNotification,
   type AiPracticeLog,
   type BadgeCategory,
+  type AdminSystemUser,
 } from "@/lib/lmsData";
-import { sendReportCardEmail } from "@/lib/email";
+import { sendReportCardEmail, sendCalendarEventEmail } from "@/lib/email";
 
 function inferMarkingMethod(type: string) {
   switch (type) {
@@ -1671,6 +1672,7 @@ export async function POST(request: Request) {
         category = "School Event",
         description = "",
         targetStudentUsername = "ALL",
+        sendEmailNotification = false,
       } = body;
 
       if (!lms.calendarEvents) lms.calendarEvents = [];
@@ -1685,14 +1687,53 @@ export async function POST(request: Request) {
           | "School Event",
         description: String(description),
         targetStudentUsername: String(targetStudentUsername).toUpperCase(),
+        emailNotificationSent: Boolean(sendEmailNotification),
         createdAt: new Date().toISOString(),
       };
       lms.calendarEvents.unshift(ev);
+
+      // Email notification dispatch if requested
+      let emailNotificationResult = null;
+      if (sendEmailNotification) {
+        try {
+          const accounts = await getStudentAccounts();
+          let targetEmails: string[] = [];
+          let targetName = "";
+
+          if (ev.targetStudentUsername !== "ALL") {
+            const matched = accounts.find(
+              (a) => a.username?.toUpperCase() === ev.targetStudentUsername
+            );
+            if (matched?.email) {
+              targetEmails.push(matched.email);
+              targetName = matched.studentName;
+            }
+          } else {
+            targetEmails = accounts.map((a) => a.email).filter(Boolean);
+          }
+
+          emailNotificationResult = await sendCalendarEventEmail({
+            title: ev.title,
+            date: ev.date,
+            category: ev.category,
+            description: ev.description,
+            targetStudentUsername: ev.targetStudentUsername,
+            targetStudentName: targetName,
+            recipientEmails: targetEmails,
+          });
+        } catch (mailErr) {
+          console.error("Failed to send calendar event notification email:", mailErr);
+        }
+      }
+
       await saveLmsData(lms);
       return NextResponse.json({
         success: true,
-        message: `Calendar event "${ev.title}" added!`,
+        message: sendEmailNotification
+          ? `Calendar event "${ev.title}" saved and email notifications queued!`
+          : `Calendar event "${ev.title}" added!`,
         event: ev,
+        emailResult: emailNotificationResult,
       });
     }
 
@@ -1701,6 +1742,142 @@ export async function POST(request: Request) {
       lms.calendarEvents = (lms.calendarEvents || []).filter((e) => e.id !== eventId);
       await saveLmsData(lms);
       return NextResponse.json({ success: true, message: "Calendar event removed." });
+    }
+
+    // 17. USER MANAGEMENT, ROLES & PERMISSIONS
+    if (action === "save-admin-user") {
+      const {
+        id,
+        name,
+        email,
+        role = "teacher",
+        status = "active",
+        phone = "",
+        permissions,
+      } = body;
+
+      if (!name || !email) {
+        return NextResponse.json(
+          { success: false, message: "User name and email are required." },
+          { status: 400 }
+        );
+      }
+
+      if (!lms.adminUsers) {
+        // Seed default super admin user if list was empty
+        lms.adminUsers = [
+          {
+            id: "user-superadmin-1",
+            name: "Primary Administrator",
+            email: "brightpathlearninghub6@gmail.com",
+            role: "super_admin",
+            status: "active",
+            phone: "+234 806 320 2616",
+            permissions: {
+              canManageHomework: true,
+              canManageProgress: true,
+              canManageReports: true,
+              canManageCampus: true,
+              canManageCMS: true,
+              canManageUsers: true,
+            },
+            createdAt: new Date().toISOString(),
+          },
+        ];
+      }
+
+      const roleDefaults = {
+        super_admin: {
+          canManageHomework: true,
+          canManageProgress: true,
+          canManageReports: true,
+          canManageCampus: true,
+          canManageCMS: true,
+          canManageUsers: true,
+        },
+        admin: {
+          canManageHomework: true,
+          canManageProgress: true,
+          canManageReports: true,
+          canManageCampus: true,
+          canManageCMS: true,
+          canManageUsers: false,
+        },
+        teacher: {
+          canManageHomework: true,
+          canManageProgress: true,
+          canManageReports: true,
+          canManageCampus: true,
+          canManageCMS: false,
+          canManageUsers: false,
+        },
+        support: {
+          canManageHomework: false,
+          canManageProgress: false,
+          canManageReports: false,
+          canManageCampus: true,
+          canManageCMS: false,
+          canManageUsers: false,
+        },
+      };
+
+      const resolvedPermissions =
+        permissions || roleDefaults[role as keyof typeof roleDefaults] || roleDefaults.teacher;
+
+      if (id) {
+        const existingIdx = lms.adminUsers.findIndex((u) => u.id === id);
+        if (existingIdx !== -1) {
+          lms.adminUsers[existingIdx] = {
+            ...lms.adminUsers[existingIdx],
+            name: String(name),
+            email: String(email).toLowerCase(),
+            role,
+            status,
+            phone: String(phone || ""),
+            permissions: resolvedPermissions,
+          };
+          await saveLmsData(lms);
+          return NextResponse.json({
+            success: true,
+            message: `User ${name} updated successfully!`,
+            user: lms.adminUsers[existingIdx],
+          });
+        }
+      }
+
+      const newUser: AdminSystemUser = {
+        id: `user-${Date.now()}`,
+        name: String(name),
+        email: String(email).toLowerCase(),
+        role,
+        status,
+        phone: String(phone || ""),
+        permissions: resolvedPermissions,
+        createdAt: new Date().toISOString(),
+      };
+
+      lms.adminUsers.push(newUser);
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message: `New team member ${name} (${role}) added!`,
+        user: newUser,
+      });
+    }
+
+    if (action === "delete-admin-user") {
+      const { userId } = body;
+      if (!lms.adminUsers) lms.adminUsers = [];
+      const user = lms.adminUsers.find((u) => u.id === userId);
+      if (user?.role === "super_admin") {
+        return NextResponse.json(
+          { success: false, message: "Super Administrator account cannot be deleted." },
+          { status: 400 }
+        );
+      }
+      lms.adminUsers = lms.adminUsers.filter((u) => u.id !== userId);
+      await saveLmsData(lms);
+      return NextResponse.json({ success: true, message: "Team member removed." });
     }
 
     return NextResponse.json(

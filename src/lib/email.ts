@@ -531,3 +531,92 @@ export async function sendReportCardEmail(
   };
 }
 
+export async function sendCalendarEventEmail(eventData: {
+  title: string;
+  date: string;
+  category: string;
+  description?: string;
+  targetStudentUsername?: string;
+  targetStudentName?: string;
+  recipientEmails: string[];
+}) {
+  const transporter = getTransporter();
+  if (!transporter) return { sent: false, reason: "SMTP not configured" };
+
+  const recipients = Array.from(new Set(eventData.recipientEmails.filter(e => e && e.includes("@"))));
+  if (recipients.length === 0) {
+    recipients.push(adminEmail);
+  }
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+      <div style="background: linear-gradient(135deg, #071527 0%, #133e87 100%); color: #ffffff; padding: 26px 22px; text-align: center;">
+        <div style="display: inline-block; background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 8px;">
+          ACADEMIC CALENDAR & EVENT NOTIFICATION
+        </div>
+        <h1 style="margin: 0; font-size: 20px; color: #ffffff;">${eventData.title}</h1>
+        <p style="margin: 6px 0 0; color: #cbd5e1; font-size: 13px;">${eventData.category} • Scheduled for ${eventData.date}</p>
+      </div>
+
+      <div style="padding: 24px 20px; background: #ffffff; color: #1e293b; line-height: 1.6;">
+        <p style="margin: 0 0 14px;">Hello from <strong>Bright Path Learning Hub</strong>,</p>
+        <p style="margin: 0 0 16px;">A new academic event or deadline has been scheduled on the calendar:</p>
+
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px; margin: 18px 0;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr>
+              <td style="padding: 6px 0; color: #64748b; width: 35%;">Event Title:</td>
+              <td style="padding: 6px 0; font-weight: 700; color: #0f172a;">${eventData.title}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Event Date:</td>
+              <td style="padding: 6px 0; font-weight: 700; color: #059669;">${eventData.date}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Category:</td>
+              <td style="padding: 6px 0; font-weight: 600;">${eventData.category}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #64748b;">Target Audience:</td>
+              <td style="padding: 6px 0; font-weight: 600;">${eventData.targetStudentName ? `${eventData.targetStudentName} (${eventData.targetStudentUsername})` : "All Students & Parents"}</td>
+            </tr>
+          </table>
+          ${eventData.description ? `
+            <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #cbd5e1; font-size: 13px; color: #334155;">
+              <strong>Details / Instructions:</strong><br/>
+              ${eventData.description}
+            </div>
+          ` : ""}
+        </div>
+
+        <div style="text-align: center; margin: 24px 0 16px;">
+          <a href="https://brightpathlearninghub.vercel.app/portal" style="display: inline-block; background: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px;">
+            Open Learning Hub Portal →
+          </a>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0;">
+          Bright Path Learning Hub • Kubwa, Abuja • Govt. Reg. No. 9840276<br/>
+          Phone/WhatsApp: +234 806 320 2616 • Email: brightpathlearninghub6@gmail.com
+        </p>
+      </div>
+    </div>
+  `;
+
+  const tasks = recipients.map(email =>
+    transporter.sendMail({
+      from: smtpFrom,
+      to: email,
+      subject: `Calendar Notification: ${eventData.title} (${eventData.date})`,
+      html,
+    })
+  );
+
+  const results = await Promise.allSettled(tasks);
+  return {
+    sent: results.some((r) => r.status === "fulfilled"),
+    recipientsCount: recipients.length,
+  };
+}
+
