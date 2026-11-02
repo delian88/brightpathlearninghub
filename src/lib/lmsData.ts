@@ -243,6 +243,47 @@ export interface PortalNotification {
   readBy?: string[];
 }
 
+export type SubjectKey =
+  | "english_phonics"
+  | "writing"
+  | "mathematics"
+  | "public_speaking"
+  | "coding";
+
+export interface SubjectSkillMetric {
+  id: string;
+  label: string;
+  mastery: number; // 0 - 100
+}
+
+export interface SubjectProgressTrack {
+  subjectKey: SubjectKey;
+  subjectLabel: string;
+  whatToMeasure: string;
+  beforeScore: number; // Baseline assessment (%)
+  afterScore: number; // Current / After assessment (%)
+  skills: SubjectSkillMetric[];
+}
+
+export interface PeriodProgressSummary {
+  period: "daily" | "weekly" | "monthly" | "termly";
+  label: string;
+  lessonsDone: number;
+  targetLessons: number;
+  practiceMinutes: number;
+  avgScore: number;
+  summaryNote: string;
+}
+
+export interface TeacherObservationNote {
+  id: string;
+  subject: string;
+  observation: string;
+  recommendation?: string;
+  createdAt: string;
+  teacherName?: string;
+}
+
 export interface StudentProgressRecord {
   studentUsername: string;
   studentName: string;
@@ -256,6 +297,13 @@ export interface StudentProgressRecord {
   customImprovements: string[];
   completedActivityIds: string[];
   badges: StudentBadge[];
+  // Module D: Dedicated Subject & Period Progress Tracking
+  subjectTracks?: SubjectProgressTrack[];
+  periodSummaries?: Record<"daily" | "weekly" | "monthly" | "termly", PeriodProgressSummary>;
+  teacherObservations?: TeacherObservationNote[];
+  improvementRecommendations?: string[];
+  flaggedForAttention?: boolean;
+  flagReason?: string;
   updatedAt: string;
 }
 
@@ -645,6 +693,118 @@ export const defaultLmsData: LmsStateData = {
   aiLogs: [],
 };
 
+export function createDefaultSubjectTracks(): SubjectProgressTrack[] {
+  return [
+    {
+      subjectKey: "english_phonics",
+      subjectLabel: "English / Phonics",
+      whatToMeasure: "Letter sounds, blending, pronunciation, reading fluency",
+      beforeScore: 0,
+      afterScore: 0,
+      skills: [
+        { id: "letter_sounds", label: "Letter Sounds", mastery: 0 },
+        { id: "blending", label: "Phonics Blending", mastery: 0 },
+        { id: "pronunciation", label: "Word Pronunciation", mastery: 0 },
+        { id: "reading_fluency", label: "Reading Fluency", mastery: 0 },
+      ],
+    },
+    {
+      subjectKey: "writing",
+      subjectLabel: "Writing",
+      whatToMeasure: "Letter formation, spelling, vocabulary, sentence writing",
+      beforeScore: 0,
+      afterScore: 0,
+      skills: [
+        { id: "letter_formation", label: "Letter Formation & Tracing", mastery: 0 },
+        { id: "spelling", label: "Spelling Accuracy", mastery: 0 },
+        { id: "vocabulary", label: "Writing Vocabulary", mastery: 0 },
+        { id: "sentence_writing", label: "Sentence Construction & Grammar", mastery: 0 },
+      ],
+    },
+    {
+      subjectKey: "mathematics",
+      subjectLabel: "Mathematics",
+      whatToMeasure: "Counting, calculations, problem solving",
+      beforeScore: 0,
+      afterScore: 0,
+      skills: [
+        { id: "counting", label: "Number Recognition & Counting", mastery: 0 },
+        { id: "calculations", label: "Calculations (+, −, ×)", mastery: 0 },
+        { id: "problem_solving", label: "Word Problem Solving & Shapes", mastery: 0 },
+      ],
+    },
+    {
+      subjectKey: "public_speaking",
+      subjectLabel: "Public Speaking",
+      whatToMeasure: "Fluency, vocabulary, pronunciation, confidence",
+      beforeScore: 0,
+      afterScore: 0,
+      skills: [
+        { id: "speaking_fluency", label: "Oral Fluency & Expression", mastery: 0 },
+        { id: "speaking_vocab", label: "Spoken Vocabulary", mastery: 0 },
+        { id: "speaking_pronunciation", label: "Clear Articulation & Pronunciation", mastery: 0 },
+        { id: "speaking_confidence", label: "Stage & Conversation Confidence", mastery: 0 },
+      ],
+    },
+    {
+      subjectKey: "coding",
+      subjectLabel: "Coding",
+      whatToMeasure: "Logical thinking, coding exercises, completed projects",
+      beforeScore: 0,
+      afterScore: 0,
+      skills: [
+        { id: "logical_thinking", label: "Logical & Algorithmic Thinking", mastery: 0 },
+        { id: "coding_exercises", label: "Coding Exercises Completed", mastery: 0 },
+        { id: "completed_projects", label: "Completed Coding Projects", mastery: 0 },
+      ],
+    },
+  ];
+}
+
+export function createDefaultPeriodSummaries(): Record<
+  "daily" | "weekly" | "monthly" | "termly",
+  PeriodProgressSummary
+> {
+  return {
+    daily: {
+      period: "daily",
+      label: "Daily Progress",
+      lessonsDone: 0,
+      targetLessons: 2,
+      practiceMinutes: 0,
+      avgScore: 0,
+      summaryNote: "Daily reading, phonics warmup, and homework checklist.",
+    },
+    weekly: {
+      period: "weekly",
+      label: "Weekly Progress",
+      lessonsDone: 0,
+      targetLessons: 5,
+      practiceMinutes: 0,
+      avgScore: 0,
+      summaryNote: "1-on-1 live classes attended and weekly homework submissions.",
+    },
+    monthly: {
+      period: "monthly",
+      label: "Monthly Progress",
+      lessonsDone: 0,
+      targetLessons: 12,
+      practiceMinutes: 0,
+      avgScore: 0,
+      summaryNote: "Monthly competency growth across reading, writing, speaking, math, and coding.",
+    },
+    termly: {
+      period: "termly",
+      label: "Termly Progress",
+      lessonsDone: 0,
+      targetLessons: 24,
+      practiceMinutes: 0,
+      avgScore: 0,
+      summaryNote: "Full academic term mastery and before-and-after assessment comparison.",
+    },
+  };
+}
+
 export function getOrCreateStudentProgress(
   state: LmsStateData,
   studentUsername: string,
@@ -652,7 +812,20 @@ export function getOrCreateStudentProgress(
 ): StudentProgressRecord {
   const key = studentUsername.toUpperCase();
   if (state.progressRecords[key]) {
-    return state.progressRecords[key];
+    const existing = state.progressRecords[key];
+    if (!existing.subjectTracks || existing.subjectTracks.length === 0) {
+      existing.subjectTracks = createDefaultSubjectTracks();
+    }
+    if (!existing.periodSummaries) {
+      existing.periodSummaries = createDefaultPeriodSummaries();
+    }
+    if (!existing.teacherObservations) {
+      existing.teacherObservations = [];
+    }
+    if (!existing.improvementRecommendations) {
+      existing.improvementRecommendations = [];
+    }
+    return existing;
   }
 
   return {
@@ -668,6 +841,198 @@ export function getOrCreateStudentProgress(
     customImprovements: [],
     completedActivityIds: [],
     badges: [],
+    subjectTracks: createDefaultSubjectTracks(),
+    periodSummaries: createDefaultPeriodSummaries(),
+    teacherObservations: [],
+    improvementRecommendations: [],
+    flaggedForAttention: false,
+    flagReason: "",
     updatedAt: new Date().toISOString(),
+  };
+}
+
+export interface StudentProgressAnalysis {
+  subjectTracks: SubjectProgressTrack[];
+  periodSummaries: Record<"daily" | "weekly" | "monthly" | "termly", PeriodProgressSummary>;
+  weaknesses: string[];
+  recommendations: string[];
+  isStruggling: boolean;
+  strugglingReasons: string[];
+}
+
+export function analyzeStudentProgressAndAlerts(
+  prog: StudentProgressRecord | null | undefined,
+  submissions: HomeworkSubmission[] = [],
+  aiLogs: AiPracticeLog[] = []
+): StudentProgressAnalysis {
+  const baseTracks =
+    prog?.subjectTracks && prog.subjectTracks.length === 5
+      ? prog.subjectTracks.map((t) => ({
+          ...t,
+          skills: t.skills.map((s) => ({ ...s })),
+        }))
+      : createDefaultSubjectTracks();
+
+  const basePeriods = prog?.periodSummaries
+    ? { ...prog.periodSummaries }
+    : createDefaultPeriodSummaries();
+
+  // Compute averages from real submissions and AI logs to enrich zero-value defaults
+  const readingLogs = aiLogs.filter((l) => l.mode === "reading" || l.mode === "pronunciation");
+  const writingLogs = aiLogs.filter((l) => l.mode === "writing");
+  const speakingLogs = aiLogs.filter((l) => l.mode === "speaking" || l.mode === "chat");
+  const mathLogs = aiLogs.filter((l) => l.mode === "math");
+
+  const avgOf = (nums: number[]) =>
+    nums.length > 0 ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0;
+
+  const readingAvg = avgOf(readingLogs.map((l) => l.score)) || prog?.readingProgress || 0;
+  const writingAvg = avgOf(writingLogs.map((l) => l.score));
+  const speakingAvg = avgOf(speakingLogs.map((l) => l.score));
+  const mathAvg = avgOf(mathLogs.map((l) => l.score));
+  const hwAvg = avgOf(submissions.map((s) => s.percentage));
+
+  baseTracks.forEach((track) => {
+    let fallbackScore = 0;
+    if (track.subjectKey === "english_phonics") fallbackScore = readingAvg || hwAvg;
+    if (track.subjectKey === "writing") fallbackScore = writingAvg || hwAvg;
+    if (track.subjectKey === "mathematics") fallbackScore = mathAvg || hwAvg;
+    if (track.subjectKey === "public_speaking") fallbackScore = speakingAvg || readingAvg;
+    if (track.subjectKey === "coding") fallbackScore = hwAvg;
+
+    track.skills.forEach((sk) => {
+      if (sk.mastery === 0 && fallbackScore > 0) {
+        sk.mastery = fallbackScore;
+      }
+    });
+
+    const computedAfter = avgOf(track.skills.map((s) => s.mastery));
+    if (track.afterScore === 0 && computedAfter > 0) {
+      track.afterScore = computedAfter;
+    }
+  });
+
+  // Enrich Daily / Weekly / Monthly / Termly summaries
+  const now = Date.now();
+  const oneDayMs = 86400000;
+  const recentDayLogs = aiLogs.filter(
+    (l) => now - new Date(l.createdAt).getTime() <= oneDayMs
+  );
+  const recentWeekLogs = aiLogs.filter(
+    (l) => now - new Date(l.createdAt).getTime() <= 7 * oneDayMs
+  );
+  const recentMonthLogs = aiLogs.filter(
+    (l) => now - new Date(l.createdAt).getTime() <= 30 * oneDayMs
+  );
+
+  const dailyMins = recentDayLogs.reduce((acc, l) => acc + (l.timeSpentMinutes || 5), 0);
+  const weeklyMins = recentWeekLogs.reduce((acc, l) => acc + (l.timeSpentMinutes || 5), 0);
+  const monthlyMins = recentMonthLogs.reduce((acc, l) => acc + (l.timeSpentMinutes || 5), 0);
+  const termlyMins = Math.round((prog?.learningHours || 0) * 60) || monthlyMins;
+
+  if (basePeriods.daily.practiceMinutes === 0 && dailyMins > 0) {
+    basePeriods.daily.practiceMinutes = dailyMins;
+  }
+  if (basePeriods.daily.lessonsDone === 0) {
+    basePeriods.daily.lessonsDone = (prog?.completedActivityIds || []).length;
+  }
+  if (basePeriods.daily.avgScore === 0) {
+    basePeriods.daily.avgScore = avgOf(recentDayLogs.map((l) => l.score)) || hwAvg;
+  }
+
+  if (basePeriods.weekly.practiceMinutes === 0 && weeklyMins > 0) {
+    basePeriods.weekly.practiceMinutes = weeklyMins;
+  }
+  if (basePeriods.weekly.lessonsDone === 0) {
+    basePeriods.weekly.lessonsDone = Math.min(5, prog?.lessonsCompleted || submissions.length);
+  }
+  if (basePeriods.weekly.avgScore === 0) {
+    basePeriods.weekly.avgScore = avgOf(recentWeekLogs.map((l) => l.score)) || hwAvg;
+  }
+
+  if (basePeriods.monthly.practiceMinutes === 0 && monthlyMins > 0) {
+    basePeriods.monthly.practiceMinutes = monthlyMins;
+  }
+  if (basePeriods.monthly.lessonsDone === 0) {
+    basePeriods.monthly.lessonsDone = Math.min(12, prog?.lessonsCompleted || submissions.length);
+  }
+  if (basePeriods.monthly.avgScore === 0) {
+    basePeriods.monthly.avgScore = avgOf(recentMonthLogs.map((l) => l.score)) || hwAvg;
+  }
+
+  if (basePeriods.termly.practiceMinutes === 0 && termlyMins > 0) {
+    basePeriods.termly.practiceMinutes = termlyMins;
+  }
+  if (basePeriods.termly.lessonsDone === 0) {
+    basePeriods.termly.lessonsDone = prog?.lessonsCompleted || 0;
+  }
+  if (basePeriods.termly.avgScore === 0) {
+    const activeSubjectScores = baseTracks
+      .map((t) => t.afterScore)
+      .filter((s) => s > 0);
+    basePeriods.termly.avgScore = avgOf(activeSubjectScores) || hwAvg;
+  }
+
+  // Weakness Identification & Improvement Recommendations
+  const weaknesses: string[] = [...(prog?.customImprovements || [])];
+  const recommendations: string[] = [...(prog?.improvementRecommendations || [])];
+
+  baseTracks.forEach((track) => {
+    track.skills.forEach((sk) => {
+      if (sk.mastery > 0 && sk.mastery < 65) {
+        const wMsg = `${track.subjectLabel}: ${sk.label} (${sk.mastery}% mastery — below 65% target)`;
+        if (!weaknesses.includes(wMsg)) weaknesses.push(wMsg);
+
+        const recMsg = `Assign 15-min guided ${track.subjectLabel} practice focusing on ${sk.label}.`;
+        if (!recommendations.includes(recMsg)) recommendations.push(recMsg);
+      }
+    });
+  });
+
+  submissions.forEach((sub) => {
+    (sub.weakSkillsIdentified || []).forEach((ws) => {
+      const msg = `Homework skill gap in "${sub.homeworkTitle}": ${ws}`;
+      if (!weaknesses.includes(msg)) weaknesses.push(msg);
+    });
+  });
+
+  aiLogs.forEach((log) => {
+    (log.wordsNeedingImprovement || []).forEach((w) => {
+      const msg = `Pronunciation / phonics practice needed for word: "${w}"`;
+      if (!weaknesses.includes(msg)) weaknesses.push(msg);
+    });
+    if (log.recommendedNextActivity && !recommendations.includes(log.recommendedNextActivity)) {
+      recommendations.push(log.recommendedNextActivity);
+    }
+  });
+
+  // Evaluate Struggling Student / Flag for Teacher Attention
+  const strugglingReasons: string[] = [];
+  if (prog?.flaggedForAttention) {
+    strugglingReasons.push(
+      prog.flagReason || "Manually flagged by teacher for extra 1-on-1 academic support"
+    );
+  }
+  if (submissions.length > 0 && hwAvg < 60) {
+    strugglingReasons.push(`Low homework assessment average (${hwAvg}% < 60% threshold)`);
+  }
+  if (prog && prog.attendanceRate < 75) {
+    strugglingReasons.push(`Low class attendance rate (${prog.attendanceRate}% < 75%)`);
+  }
+  baseTracks.forEach((track) => {
+    if (track.afterScore > 0 && track.afterScore < 60) {
+      strugglingReasons.push(
+        `Struggling in ${track.subjectLabel} (${track.afterScore}% current mastery)`
+      );
+    }
+  });
+
+  return {
+    subjectTracks: baseTracks,
+    periodSummaries: basePeriods,
+    weaknesses,
+    recommendations,
+    isStruggling: strugglingReasons.length > 0,
+    strugglingReasons,
   };
 }

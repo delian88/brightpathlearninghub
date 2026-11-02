@@ -807,7 +807,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 6. STUDENT/TEACHER: Update Student Progress, Avatar, or Daily Activity
+    // 6. STUDENT/TEACHER: Update Student Progress, Subject Tracks, Periods, Observations & Alerts
     if (action === "update-student-profile") {
       const {
         studentUsername,
@@ -820,6 +820,13 @@ export async function POST(request: Request) {
         readingProgress,
         customStrengths,
         customImprovements,
+        subjectTracks,
+        periodSummaries,
+        teacherObservations,
+        newObservation,
+        improvementRecommendations,
+        flaggedForAttention,
+        flagReason,
       } = body;
 
       const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
@@ -843,6 +850,35 @@ export async function POST(request: Request) {
       if (readingProgress !== undefined) prog.readingProgress = Number(readingProgress);
       if (Array.isArray(customStrengths)) prog.customStrengths = customStrengths;
       if (Array.isArray(customImprovements)) prog.customImprovements = customImprovements;
+      if (Array.isArray(subjectTracks)) prog.subjectTracks = subjectTracks;
+      if (periodSummaries && typeof periodSummaries === "object") {
+        prog.periodSummaries = periodSummaries;
+      }
+      if (Array.isArray(teacherObservations)) {
+        prog.teacherObservations = teacherObservations;
+      }
+      if (newObservation && newObservation.observation) {
+        if (!prog.teacherObservations) prog.teacherObservations = [];
+        prog.teacherObservations.unshift({
+          id: `obs-${Date.now()}`,
+          subject: String(newObservation.subject || "General Academic"),
+          observation: String(newObservation.observation),
+          recommendation: newObservation.recommendation
+            ? String(newObservation.recommendation)
+            : undefined,
+          teacherName: String(newObservation.teacherName || "Bright Path Educator"),
+          createdAt: new Date().toISOString(),
+        });
+      }
+      if (Array.isArray(improvementRecommendations)) {
+        prog.improvementRecommendations = improvementRecommendations;
+      }
+      if (flaggedForAttention !== undefined) {
+        prog.flaggedForAttention = Boolean(flaggedForAttention);
+      }
+      if (flagReason !== undefined) {
+        prog.flagReason = String(flagReason);
+      }
 
       prog.updatedAt = new Date().toISOString();
       lms.progressRecords[cleanUser] = prog;
@@ -850,7 +886,7 @@ export async function POST(request: Request) {
       await saveLmsData(lms);
       return NextResponse.json({
         success: true,
-        message: "Student progress profile updated!",
+        message: "Student progress & subject mastery profile updated!",
         progress: prog,
       });
     }

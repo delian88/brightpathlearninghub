@@ -18,7 +18,13 @@ import {
   type HomeworkAttachment,
   type QuestionType,
   type AssignmentLifecycleStatus,
+  type SubjectProgressTrack,
+  type PeriodProgressSummary,
+  type TeacherObservationNote,
   getOrCreateStudentProgress,
+  createDefaultSubjectTracks,
+  createDefaultPeriodSummaries,
+  analyzeStudentProgressAndAlerts,
 } from "@/lib/lmsData";
 import { downloadReportCardPdf } from "@/lib/pdfReportGenerator";
 import type { ToastType } from "./ToastNotification";
@@ -251,7 +257,7 @@ export default function AdminLmsManager({
   const [savingGrade, setSavingGrade] = useState(false);
 
   // ==========================================================================
-  // 3. STUDENT ACADEMIC PROGRESS EDITOR & ANNOUNCEMENTS STATE
+  // 3. STUDENT ACADEMIC PROGRESS EDITOR & ANNOUNCEMENTS STATE (Module D)
   // ==========================================================================
   const [selectedStudentUser, setSelectedStudentUser] = useState<string>("");
   const [editLessonsCompleted, setEditLessonsCompleted] = useState<number>(0);
@@ -260,6 +266,21 @@ export default function AdminLmsManager({
   const [editLearningHours, setEditLearningHours] = useState<number>(0);
   const [editStrengthsText, setEditStrengthsText] = useState<string>("");
   const [editImprovementsText, setEditImprovementsText] = useState<string>("");
+  const [editRecommendationsText, setEditRecommendationsText] = useState<string>("");
+  const [editSubjectTracks, setEditSubjectTracks] = useState<SubjectProgressTrack[]>(
+    createDefaultSubjectTracks()
+  );
+  const [editPeriodSummaries, setEditPeriodSummaries] = useState<
+    Record<"daily" | "weekly" | "monthly" | "termly", PeriodProgressSummary>
+  >(createDefaultPeriodSummaries());
+  const [editFlaggedForAttention, setEditFlaggedForAttention] = useState<boolean>(false);
+  const [editFlagReason, setEditFlagReason] = useState<string>("");
+  const [editTeacherObservations, setEditTeacherObservations] = useState<
+    TeacherObservationNote[]
+  >([]);
+  const [newObsSubject, setNewObsSubject] = useState<string>("English / Phonics");
+  const [newObsNote, setNewObsNote] = useState<string>("");
+  const [newObsAction, setNewObsAction] = useState<string>("");
   const [savingProgressProfile, setSavingProgressProfile] = useState(false);
 
   const [announcementTarget, setAnnouncementTarget] = useState<string>("ALL");
@@ -306,12 +327,26 @@ export default function AdminLmsManager({
       selectedStudentUser,
       stu?.studentName || selectedStudentUser
     );
+    const analyzed = analyzeStudentProgressAndAlerts(
+      prog,
+      lmsData.submissions,
+      lmsData.aiLogs
+    );
+
     setEditLessonsCompleted(prog.lessonsCompleted || 0);
     setEditReadingProgress(prog.readingProgress || 0);
     setEditAttendanceRate(prog.attendanceRate ?? 100);
     setEditLearningHours(prog.learningHours || 0);
     setEditStrengthsText((prog.customStrengths || []).join("\n"));
     setEditImprovementsText((prog.customImprovements || []).join("\n"));
+    setEditRecommendationsText(
+      (prog.improvementRecommendations || analyzed.recommendations || []).join("\n")
+    );
+    setEditSubjectTracks(analyzed.subjectTracks);
+    setEditPeriodSummaries(analyzed.periodSummaries);
+    setEditFlaggedForAttention(Boolean(prog.flaggedForAttention));
+    setEditFlagReason(prog.flagReason || "");
+    setEditTeacherObservations(prog.teacherObservations || []);
   }, [selectedStudentUser, lmsData, allRealStudents]);
 
   // Sync Report Card inputs from the student's actual progress & submissions when rcStudentUser changes
@@ -676,11 +711,35 @@ export default function AdminLmsManager({
             .split("\n")
             .map((s) => s.trim())
             .filter(Boolean),
+          improvementRecommendations: editRecommendationsText
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          subjectTracks: editSubjectTracks,
+          periodSummaries: editPeriodSummaries,
+          flaggedForAttention: editFlaggedForAttention,
+          flagReason: editFlagReason,
+          teacherObservations: editTeacherObservations,
+          newObservation: newObsNote.trim()
+            ? {
+                subject: newObsSubject,
+                observation: newObsNote.trim(),
+                recommendation: newObsAction.trim(),
+                teacherName: "Bright Path Teacher",
+              }
+            : undefined,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        showToast(`Academic progress saved for ${stu?.studentName || selectedStudentUser}!`, "success");
+        showToast(
+          `Academic progress, subject mastery & observations saved for ${
+            stu?.studentName || selectedStudentUser
+          }!`,
+          "success"
+        );
+        setNewObsNote("");
+        setNewObsAction("");
         onRefresh();
       } else {
         showToast(data.message || "Could not update progress.", "error");
@@ -2203,22 +2262,190 @@ export default function AdminLmsManager({
   }
 
   // ==========================================================================
-  // SECTION 2: ACADEMIC PROGRESS TRACKER, AI LOGS & ANNOUNCEMENTS (/admin/progress)
+  // SECTION 2: MODULE D — DEDICATED STUDENT PROGRESS TRACKING (/admin/progress)
   // ==========================================================================
   if (activeSection === "lms-progress") {
+    // Evaluate all students to identify anyone struggling or flagged for teacher attention
+    const strugglingStudentsAlertList = allRealStudents
+      .map((stu) => {
+        const prog = getOrCreateStudentProgress(
+          lmsData,
+          stu.username,
+          stu.studentName
+        );
+        const analysis = analyzeStudentProgressAndAlerts(
+          prog,
+          lmsData.submissions,
+          lmsData.aiLogs
+        );
+        return {
+          student: stu,
+          progress: prog,
+          analysis,
+        };
+      })
+      .filter((item) => item.analysis.isStruggling);
+
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {/* =================================================================
+            1. EARLY-WARNING RADAR: STUDENTS STRUGGLING / FLAGGED FOR ATTENTION
+            ================================================================= */}
+        <div
+          className="admin-panel-card"
+          style={{
+            padding: 22,
+            border:
+              strugglingStudentsAlertList.length > 0
+                ? "2px solid #fca5a5"
+                : "1px solid #a7f3d0",
+            background:
+              strugglingStudentsAlertList.length > 0
+                ? "linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%)"
+                : "linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 12,
+              marginBottom: strugglingStudentsAlertList.length > 0 ? 14 : 0,
+            }}
+          >
+            <div>
+              <span
+                style={{
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  color:
+                    strugglingStudentsAlertList.length > 0 ? "#dc2626" : "#059669",
+                  textTransform: "uppercase",
+                }}
+              >
+                {strugglingStudentsAlertList.length > 0
+                  ? `🚨 Early-Warning Intervention Radar • ${strugglingStudentsAlertList.length} Student(s) Flagged`
+                  : "✅ Early-Warning Intervention Radar • All Students On Track"}
+              </span>
+              <h3
+                style={{
+                  margin: "2px 0 0",
+                  fontSize: "1.1rem",
+                  fontWeight: 900,
+                  color: "#0f172a",
+                }}
+              >
+                {strugglingStudentsAlertList.length > 0
+                  ? "Students Identified as Struggling & Flagged for Teacher Attention"
+                  : "No Students Currently Flagged for Urgent Academic Intervention"}
+              </h3>
+              <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "#475569" }}>
+                Automatically flags students when any sub-skill mastery drops below 60%, homework or AI scores are low, attendance drops below 75%, or when manually flagged by a teacher.
+              </p>
+            </div>
+          </div>
+
+          {strugglingStudentsAlertList.length > 0 && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {strugglingStudentsAlertList.map(({ student, analysis }) => (
+                <div
+                  key={student.username}
+                  style={{
+                    background: "#ffffff",
+                    borderRadius: 14,
+                    padding: 16,
+                    border: "1px solid #fecaca",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    gap: 10,
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <span style={{ fontWeight: 900, fontSize: "0.95rem", color: "#991b1b" }}>
+                        🚩 {student.studentName}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          fontWeight: 800,
+                          background: "#fee2e2",
+                          color: "#dc2626",
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                        }}
+                      >
+                        {student.username}
+                      </span>
+                    </div>
+                    <ul
+                      style={{
+                        margin: "8px 0 0",
+                        paddingLeft: 18,
+                        fontSize: "0.79rem",
+                        color: "#7f1d1d",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {analysis.strugglingReasons.map((reason, idx) => (
+                        <li key={idx}>{reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStudentUser(student.username)}
+                    style={{
+                      alignSelf: "flex-start",
+                      background: "#dc2626",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: 8,
+                      padding: "7px 13px",
+                      fontSize: "0.76rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Inspect & Intervene ➔
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* =================================================================
+            2. DEDICATED STUDENT PROGRESS & SUBJECT MASTERY EDITOR
+            ================================================================= */}
         <div className="admin-panel-card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
             <div>
               <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#4f46e5", textTransform: "uppercase" }}>
                 Dedicated Page • /admin/progress
               </span>
-              <h2 style={{ margin: "2px 0 0", fontSize: "1.15rem", fontWeight: 800 }}>
-                📈 Student Academic Development & Areas Needing Improvement
+              <h2 style={{ margin: "2px 0 0", fontSize: "1.18rem", fontWeight: 800 }}>
+                📈 Dedicated Student Progress Tracking (Subject Mastery, Assessments & Observations)
               </h2>
               <p style={{ margin: "2px 0 0", fontSize: "0.84rem", color: "#64748b" }}>
-                Select any registered student to view or update their real progress metrics, strengths, and areas needing improvement.
+                Track and update Daily/Weekly/Monthly/Termly progress, Before-and-After assessments, 5-subject sub-skill mastery, weakness identification, and teacher observations.
               </p>
             </div>
 
@@ -2243,7 +2470,8 @@ export default function AdminLmsManager({
             </div>
           ) : (
             <form onSubmit={handleSaveStudentProgressProfile}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 18 }}>
+              {/* Core Attendance & Study Metrics */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 20 }}>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Lessons Completed</label>
                   <input
@@ -2289,9 +2517,312 @@ export default function AdminLmsManager({
                 </div>
               </div>
 
-              <div className="form-row-2col" style={{ marginBottom: 16 }}>
+              {/* Manual Teacher Attention Flag */}
+              <div
+                style={{
+                  background: editFlaggedForAttention ? "#fef2f2" : "#f8fafc",
+                  border: editFlaggedForAttention ? "1px solid #fca5a5" : "1px solid #e2e8f0",
+                  borderRadius: 14,
+                  padding: 16,
+                  marginBottom: 22,
+                  display: "grid",
+                  gridTemplateColumns: "auto 1fr",
+                  gap: 16,
+                  alignItems: "center",
+                }}
+              >
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontWeight: 800,
+                    fontSize: "0.86rem",
+                    color: editFlaggedForAttention ? "#dc2626" : "#0f172a",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={editFlaggedForAttention}
+                    onChange={(e) => setEditFlaggedForAttention(e.target.checked)}
+                    style={{ width: 18, height: 18 }}
+                  />
+                  🚩 Flag Student for Teacher Attention
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Reason for flagging (e.g., Struggling with consonant blends and vowel digraphs — schedule extra 1:1 phonics drill)"
+                  value={editFlagReason}
+                  onChange={(e) => setEditFlagReason(e.target.value)}
+                  style={{ background: "#ffffff" }}
+                />
+              </div>
+
+              {/* 5 Subject Tracks: Before & After Assessments + Sub-Skill Mastery Percentages */}
+              <div style={{ marginBottom: 24 }}>
+                <h3 style={{ margin: "0 0 6px", fontSize: "1.02rem", fontWeight: 900, color: "#0f172a" }}>
+                  📚 Subject-by-Subject Skill Mastery & Before/After Diagnostic Assessments
+                </h3>
+                <p style={{ margin: "0 0 14px", fontSize: "0.8rem", color: "#64748b" }}>
+                  Update each subject’s Baseline (Before) Assessment %, Current (After) Assessment %, and individual sub-skill mastery percentages. Any skill below 60% automatically triggers a weakness alert.
+                </p>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))",
+                    gap: 16,
+                  }}
+                >
+                  {editSubjectTracks.map((track, tIdx) => (
+                    <div
+                      key={track.subjectKey}
+                      style={{
+                        background: "#f8fafc",
+                        borderRadius: 16,
+                        padding: 16,
+                        border: "1px solid #cbd5e1",
+                        borderTop: "4px solid #4f46e5",
+                      }}
+                    >
+                      <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "#0f172a", marginBottom: 4 }}>
+                        {track.subjectLabel}
+                      </div>
+                      <div style={{ fontSize: "0.73rem", color: "#64748b", marginBottom: 10 }}>
+                        Measures: {track.whatToMeasure}
+                      </div>
+
+                      {/* Before & After Assessment Inputs */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", fontWeight: 800, color: "#64748b" }}>
+                            Before Assessment (%)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            className="form-input"
+                            value={track.beforeScore}
+                            onChange={(e) => {
+                              const updated = [...editSubjectTracks];
+                              updated[tIdx] = {
+                                ...updated[tIdx],
+                                beforeScore: Number(e.target.value),
+                              };
+                              setEditSubjectTracks(updated);
+                            }}
+                            style={{ background: "#fff", padding: "6px 10px" }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.72rem", fontWeight: 800, color: "#047857" }}>
+                            After Assessment (%)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            className="form-input"
+                            value={track.afterScore}
+                            onChange={(e) => {
+                              const updated = [...editSubjectTracks];
+                              updated[tIdx] = {
+                                ...updated[tIdx],
+                                afterScore: Number(e.target.value),
+                              };
+                              setEditSubjectTracks(updated);
+                            }}
+                            style={{ background: "#ecfdf5", padding: "6px 10px", fontWeight: 800 }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Sub-skills */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {track.skills.map((sk, sIdx) => (
+                          <div
+                            key={sk.id}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 78px",
+                              alignItems: "center",
+                              gap: 8,
+                              background: "#ffffff",
+                              padding: "6px 10px",
+                              borderRadius: 8,
+                              border: "1px solid #e2e8f0",
+                            }}
+                          >
+                            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#334155" }}>
+                              {sk.label}
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              className="form-input"
+                              value={sk.mastery}
+                              onChange={(e) => {
+                                const val = Math.max(0, Math.min(100, Number(e.target.value)));
+                                const updated = [...editSubjectTracks];
+                                const newSkills = [...updated[tIdx].skills];
+                                newSkills[sIdx] = { ...newSkills[sIdx], mastery: val };
+                                const avgAfter = Math.round(
+                                  newSkills.reduce((acc, item) => acc + item.mastery, 0) /
+                                    newSkills.length
+                                );
+                                updated[tIdx] = {
+                                  ...updated[tIdx],
+                                  skills: newSkills,
+                                  afterScore: avgAfter,
+                                };
+                                setEditSubjectTracks(updated);
+                              }}
+                              style={{ padding: "4px 8px", fontSize: "0.8rem", textAlign: "right" }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Daily, Weekly, Monthly & Termly Progress Editor */}
+              <div style={{ marginBottom: 24 }}>
+                <h3 style={{ margin: "0 0 6px", fontSize: "1.02rem", fontWeight: 900, color: "#0f172a" }}>
+                  🗓️ Daily, Weekly, Monthly & Termly Progress Milestones
+                </h3>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  {(["daily", "weekly", "monthly", "termly"] as const).map((periodKey) => {
+                    const ps = editPeriodSummaries[periodKey];
+                    if (!ps) return null;
+                    return (
+                      <div
+                        key={ps.period}
+                        style={{
+                          background: "#f8fafc",
+                          borderRadius: 12,
+                          padding: 14,
+                          border: "1px solid #cbd5e1",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 900,
+                            fontSize: "0.84rem",
+                            color: "#1e40af",
+                            textTransform: "uppercase",
+                            marginBottom: 8,
+                          }}
+                        >
+                          {ps.period} — {ps.label}
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                          <div>
+                            <label style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748b" }}>
+                              Lessons Done / Target
+                            </label>
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <input
+                                type="number"
+                                min={0}
+                                className="form-input"
+                                value={ps.lessonsDone}
+                                onChange={(e) => {
+                                  setEditPeriodSummaries((prev) => ({
+                                    ...prev,
+                                    [periodKey]: {
+                                      ...prev[periodKey],
+                                      lessonsDone: Number(e.target.value),
+                                    },
+                                  }));
+                                }}
+                                style={{ padding: "4px 6px", background: "#fff" }}
+                              />
+                              <input
+                                type="number"
+                                min={1}
+                                className="form-input"
+                                value={ps.targetLessons}
+                                onChange={(e) => {
+                                  setEditPeriodSummaries((prev) => ({
+                                    ...prev,
+                                    [periodKey]: {
+                                      ...prev[periodKey],
+                                      targetLessons: Number(e.target.value),
+                                    },
+                                  }));
+                                }}
+                                style={{ padding: "4px 6px", background: "#fff" }}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748b" }}>
+                              Avg Score (%)
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              className="form-input"
+                              value={ps.avgScore}
+                              onChange={(e) => {
+                                setEditPeriodSummaries((prev) => ({
+                                  ...prev,
+                                  [periodKey]: {
+                                    ...prev[periodKey],
+                                    avgScore: Number(e.target.value),
+                                  },
+                                }));
+                              }}
+                              style={{ padding: "4px 8px", background: "#fff" }}
+                            />
+                          </div>
+                        </div>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Summary note for this period..."
+                          value={ps.summaryNote}
+                          onChange={(e) => {
+                            setEditPeriodSummaries((prev) => ({
+                              ...prev,
+                              [periodKey]: {
+                                ...prev[periodKey],
+                                summaryNote: e.target.value,
+                              },
+                            }));
+                          }}
+                          style={{ padding: "6px 8px", fontSize: "0.78rem", background: "#fff" }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Strengths, Weakness Identification & Improvement Recommendations */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: 14,
+                  marginBottom: 20,
+                }}
+              >
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Identified Strengths (One per line)</label>
+                  <label className="form-label">✅ Observed Strengths (One per line)</label>
                   <textarea
                     rows={3}
                     className="form-input"
@@ -2301,25 +2832,141 @@ export default function AdminLmsManager({
                   />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Identified Areas Needing Improvement (One per line)</label>
+                  <label className="form-label">🎯 Weakness Identification (One per line)</label>
                   <textarea
                     rows={3}
                     className="form-input"
-                    placeholder="Enter areas where this student needs extra practice..."
+                    placeholder="Enter specific weaknesses identified..."
                     value={editImprovementsText}
                     onChange={(e) => setEditImprovementsText(e.target.value)}
                   />
                 </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">💡 Improvement Recommendations (One per line)</label>
+                  <textarea
+                    rows={3}
+                    className="form-input"
+                    placeholder="Enter actionable improvement steps for student & parent..."
+                    value={editRecommendationsText}
+                    onChange={(e) => setEditRecommendationsText(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Teacher Observations Log */}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  borderRadius: 16,
+                  padding: 18,
+                  border: "1px solid #cbd5e1",
+                  marginBottom: 20,
+                }}
+              >
+                <h4 style={{ margin: "0 0 10px", fontSize: "0.95rem", fontWeight: 900, color: "#0f172a" }}>
+                  👩‍🏫 Add New Teacher Observation Note
+                </h4>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: 10,
+                    marginBottom: editTeacherObservations.length > 0 ? 14 : 0,
+                  }}
+                >
+                  <select
+                    className="form-select"
+                    value={newObsSubject}
+                    onChange={(e) => setNewObsSubject(e.target.value)}
+                    style={{ background: "#fff" }}
+                  >
+                    <option value="English / Phonics">📖 English / Phonics</option>
+                    <option value="Writing">✍️ Writing</option>
+                    <option value="Mathematics">🔢 Mathematics</option>
+                    <option value="Public Speaking">🎙️ Public Speaking</option>
+                    <option value="Coding">💻 Coding</option>
+                  </select>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Classroom observation note..."
+                    value={newObsNote}
+                    onChange={(e) => setNewObsNote(e.target.value)}
+                    style={{ background: "#fff" }}
+                  />
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Recommended follow-up action..."
+                    value={newObsAction}
+                    onChange={(e) => setNewObsAction(e.target.value)}
+                    style={{ background: "#fff" }}
+                  />
+                </div>
+
+                {editTeacherObservations.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {editTeacherObservations.map((obs) => (
+                      <div
+                        key={obs.id}
+                        style={{
+                          background: "#ffffff",
+                          padding: "10px 14px",
+                          borderRadius: 10,
+                          border: "1px solid #e2e8f0",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 10,
+                          fontSize: "0.82rem",
+                        }}
+                      >
+                        <div>
+                          <strong>[{obs.subject}]</strong> {obs.observation}
+                          {obs.recommendation && (
+                            <span style={{ color: "#047857", fontWeight: 700, marginLeft: 8 }}>
+                              • Action: {obs.recommendation}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditTeacherObservations((prev) =>
+                              prev.filter((item) => item.id !== obs.id)
+                            )
+                          }
+                          style={{
+                            background: "#fee2e2",
+                            color: "#dc2626",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "4px 8px",
+                            fontSize: "0.72rem",
+                            fontWeight: 800,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <button
                 type="submit"
                 disabled={savingProgressProfile}
-                className="btn btn-primary"
-                style={{ padding: "10px 20px" }}
+                className="btn btn-primary shining"
+                style={{ padding: "12px 24px" }}
               >
                 <Save size={16} />
-                <span>{savingProgressProfile ? "Saving..." : "Save Student Progress Record"}</span>
+                <span>
+                  {savingProgressProfile
+                    ? "Saving Complete Progress Record..."
+                    : "Save Subject Mastery, Assessments & Teacher Observations"}
+                </span>
               </button>
             </form>
           )}

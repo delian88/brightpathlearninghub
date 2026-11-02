@@ -39,6 +39,7 @@ import {
 import ToastNotification, { type ToastData, type ToastType } from "@/components/ToastNotification";
 import StudentHomeworkModule from "@/components/StudentHomeworkModule";
 import BrightBuddyModule from "@/components/BrightBuddyModule";
+import StudentProgressModule from "@/components/StudentProgressModule";
 import {
   DEFAULT_AVATARS,
   READING_PRACTICE_PASSAGES,
@@ -2588,64 +2589,18 @@ export default function StudentPortalPage() {
         )}
 
         {/* ===================================================================
-            TAB: MY PROGRESS (Academic Development & Areas Needing Improvement)
+            TAB: MY PROGRESS (Module D: Dedicated Student Progress Tracking)
             =================================================================== */}
         {activeTab === "progress" && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 20 }}>
-            <div style={{ background: "#ffffff", borderRadius: 18, padding: 24, border: "1px solid #e2e8f0" }}>
-              <h2 style={{ margin: "0 0 16px", fontSize: "1.2rem", fontWeight: 800 }}>
-                📈 Competency & Subject Mastery Tracker
-              </h2>
-              {[
-                { label: "Phonics & Reading Fluency", val: readingProgress, color: "#10b981" },
-                { label: "Word Pronunciation & Articulation", val: 87, color: "#0284c7" },
-                { label: "Creative Writing & Sentence Structure", val: 82, color: "#7c3aed" },
-                { label: "Public Speaking Confidence", val: 89, color: "#f59e0b" },
-                { label: "Conceptual Math & Logic", val: avgAssessmentScore, color: "#ec4899" },
-              ].map((skill) => (
-                <div key={skill.label} style={{ marginBottom: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", fontWeight: 700, marginBottom: 6 }}>
-                    <span>{skill.label}</span>
-                    <span style={{ color: skill.color }}>{skill.val}%</span>
-                  </div>
-                  <div style={{ height: 10, background: "#f1f5f9", borderRadius: 999, overflow: "hidden" }}>
-                    <div
-                      style={{
-                        width: `${skill.val}%`,
-                        height: "100%",
-                        background: skill.color,
-                        borderRadius: 999,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <div style={{ background: "#ecfdf5", borderRadius: 18, padding: 22, border: "1px solid #a7f3d0" }}>
-                <h3 style={{ margin: "0 0 10px", fontSize: "1.05rem", fontWeight: 800, color: "#065f46" }}>
-                  ✅ Child&#39;s Key Academic Strengths
-                </h3>
-                <ul style={{ margin: 0, paddingLeft: 20, color: "#064e3b", fontSize: "0.88rem", lineHeight: 1.65 }}>
-                  {(progress?.customStrengths || []).map((s, idx) => (
-                    <li key={idx}>{s}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div style={{ background: "#fffbeb", borderRadius: 18, padding: 22, border: "1px solid #fde68a" }}>
-                <h3 style={{ margin: "0 0 10px", fontSize: "1.05rem", fontWeight: 800, color: "#92400e" }}>
-                  🎯 Identified Areas Where Student Needs Improvement
-                </h3>
-                <ul style={{ margin: 0, paddingLeft: 20, color: "#78350f", fontSize: "0.88rem", lineHeight: 1.65 }}>
-                  {(progress?.customImprovements || []).map((imp, idx) => (
-                    <li key={idx}>{imp}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
+          <StudentProgressModule
+            studentName={studentAccount.studentName}
+            studentUsername={studentAccount.username}
+            grade={studentAccount.grade || "All Grades"}
+            courseName={studentAccount.courseName || "English Phonics & Reading"}
+            progress={progress}
+            submissions={submissions}
+            aiLogs={aiLogs}
+          />
         )}
 
         {/* ===================================================================
@@ -3017,6 +2972,17 @@ export default function StudentPortalPage() {
                 </div>
               </div>
             </div>
+
+            {/* Full Dedicated Subject Progress & Diagnostic Module inside Parent Monitor */}
+            <StudentProgressModule
+              studentName={studentAccount.studentName}
+              studentUsername={studentAccount.username}
+              grade={studentAccount.grade || "All Grades"}
+              courseName={studentAccount.courseName || "English Phonics & Reading"}
+              progress={progress}
+              submissions={submissions}
+              aiLogs={aiLogs}
+            />
           </div>
         )}
       </main>
