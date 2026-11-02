@@ -31,7 +31,7 @@ import {
   downloadCertificatePdf,
 } from "@/lib/pdfReportGenerator";
 import type { ToastType } from "./ToastNotification";
-import AdminCampusManager from "./AdminCampusManager";
+
 
 interface AdminLmsManagerProps {
   activeSection: "lms-homework" | "lms-progress" | "lms-reports";
@@ -2668,15 +2668,7 @@ export default function AdminLmsManager({
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <AdminCampusManager
-          lmsData={lmsData}
-          students={allRealStudents.map((s: any) => ({
-            username: s.username,
-            studentName: s.studentName,
-          }))}
-          onRefresh={onRefresh}
-          showToast={showToast}
-        />
+
         {/* =================================================================            1. EARLY-WARNING RADAR: STUDENTS STRUGGLING / FLAGGED FOR ATTENTION
             ================================================================= */}
         <div

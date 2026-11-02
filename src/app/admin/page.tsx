@@ -48,6 +48,7 @@ import { defaultSiteContent, type SiteContentData } from "@/lib/defaultSiteConte
 import { defaultLmsData, type LmsStateData } from "@/lib/lmsData";
 import ToastNotification, { type ToastData, type ToastType } from "@/components/ToastNotification";
 import AdminLmsManager from "@/components/AdminLmsManager";
+import AdminCampusManager, { CAMPUS_TABS, type CampusTab } from "@/components/AdminCampusManager";
 
 type ActiveView =
   | "overview"
@@ -57,6 +58,14 @@ type ActiveView =
   | "lms-homework"
   | "lms-progress"
   | "lms-reports"
+  | "campus-profiles"
+  | "campus-announcements"
+  | "campus-timetable"
+  | "campus-attendance"
+  | "campus-materials"
+  | "campus-messages"
+  | "campus-support"
+  | "campus-calendar"
   | "cms-general"
   | "cms-hero"
   | "cms-benefits"
@@ -76,6 +85,14 @@ const VIEW_TO_PATH: Record<ActiveView, string> = {
   "lms-homework": "/admin/homework",
   "lms-progress": "/admin/progress",
   "lms-reports": "/admin/reports",
+  "campus-profiles": "/admin/campus-profiles",
+  "campus-announcements": "/admin/campus-announcements",
+  "campus-timetable": "/admin/campus-timetable",
+  "campus-attendance": "/admin/campus-attendance",
+  "campus-materials": "/admin/campus-materials",
+  "campus-messages": "/admin/campus-messages",
+  "campus-support": "/admin/campus-support",
+  "campus-calendar": "/admin/campus-calendar",
   "cms-general": "/admin/cms-general",
   "cms-hero": "/admin/cms-hero",
   "cms-benefits": "/admin/cms-benefits",
@@ -99,6 +116,14 @@ const SLUG_TO_VIEW: Record<string, ActiveView> = {
   "lms-progress": "lms-progress",
   reports: "lms-reports",
   "lms-reports": "lms-reports",
+  "campus-profiles": "campus-profiles",
+  "campus-announcements": "campus-announcements",
+  "campus-timetable": "campus-timetable",
+  "campus-attendance": "campus-attendance",
+  "campus-materials": "campus-materials",
+  "campus-messages": "campus-messages",
+  "campus-support": "campus-support",
+  "campus-calendar": "campus-calendar",
   "cms-general": "cms-general",
   "cms-hero": "cms-hero",
   "cms-benefits": "cms-benefits",
@@ -656,6 +681,38 @@ function AdminDashboardInner() {
       title: "Teacher Hub • Downloadable PDF Report Cards Generator",
       subtitle: "Generate official PDF report cards, email them to parents, and publish them to the Student & Parent Portal.",
     },
+    "campus-profiles": {
+      title: "Campus Hub - " + (CAMPUS_TABS.find((c) => c.id === "profiles")?.label || "") + "",
+      subtitle: "Manage this module for the Student & Parent Portal.",
+    },
+    "campus-announcements": {
+      title: "Campus Hub - " + (CAMPUS_TABS.find((c) => c.id === "announcements")?.label || "") + "",
+      subtitle: "Manage this module for the Student & Parent Portal.",
+    },
+    "campus-timetable": {
+      title: "Campus Hub - " + (CAMPUS_TABS.find((c) => c.id === "timetable")?.label || "") + "",
+      subtitle: "Manage this module for the Student & Parent Portal.",
+    },
+    "campus-attendance": {
+      title: "Campus Hub - " + (CAMPUS_TABS.find((c) => c.id === "attendance")?.label || "") + "",
+      subtitle: "Manage this module for the Student & Parent Portal.",
+    },
+    "campus-materials": {
+      title: "Campus Hub - " + (CAMPUS_TABS.find((c) => c.id === "materials")?.label || "") + "",
+      subtitle: "Manage this module for the Student & Parent Portal.",
+    },
+    "campus-messages": {
+      title: "Campus Hub - " + (CAMPUS_TABS.find((c) => c.id === "messages")?.label || "") + "",
+      subtitle: "Manage this module for the Student & Parent Portal.",
+    },
+    "campus-support": {
+      title: "Campus Hub - " + (CAMPUS_TABS.find((c) => c.id === "support")?.label || "") + "",
+      subtitle: "Manage this module for the Student & Parent Portal.",
+    },
+    "campus-calendar": {
+      title: "Campus Hub - " + (CAMPUS_TABS.find((c) => c.id === "calendar")?.label || "") + "",
+      subtitle: "Manage this module for the Student & Parent Portal.",
+    },
     "cms-general": {
       title: "CMS • General, Header & Footer Settings",
       subtitle: "Update brand name, registration number, phone, WhatsApp, email, address, and footer content.",
@@ -1199,6 +1256,21 @@ function AdminDashboardInner() {
             <span className="admin-nav-badge">{lmsData.reportCards.length}</span>
           </button>
 
+
+          <div className="admin-nav-section-label" style={{ marginTop: 8 }}>
+            Campus & Portal Modules
+          </div>
+          {CAMPUS_TABS.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => switchView((`campus-${c.id}`) as ActiveView)}
+              className={`admin-nav-item ${activeView === `campus-${c.id}` ? "active" : ""}`}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <LayoutDashboard size={16} /> {c.label}
+              </span>
+            </button>
+          ))}
           <div className="admin-nav-section-label" style={{ marginTop: 8 }}>
             Landing Page CMS Editor
           </div>
@@ -2286,6 +2358,19 @@ function AdminDashboardInner() {
             </div>
           )}
 
+          {activeView.startsWith("campus-") && (
+            <AdminCampusManager
+              key={activeView}
+              section={activeView.replace("campus-", "") as CampusTab}
+              lmsData={lmsData}
+              students={studentAccounts.map((s: any) => ({
+                username: s.username,
+                studentName: s.studentName,
+              }))}
+              onRefresh={() => fetchData(false)}
+              showToast={showToast}
+            />
+          )}
           {/* =================================================================
               TEACHER HUB: HOMEWORK, ACADEMIC PROGRESS & PDF REPORT CARDS
               ================================================================= */}

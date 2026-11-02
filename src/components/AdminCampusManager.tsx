@@ -4,16 +4,18 @@ import React, { useState } from "react";
 import type { LmsStateData } from "@/lib/lmsData";
 import type { ToastType } from "./ToastNotification";
 
-type CampusTab = "announcements" | "timetable" | "attendance" | "materials" | "messages" | "support" | "calendar";
+export type CampusTab = "profiles" | "announcements" | "timetable" | "attendance" | "materials" | "messages" | "support" | "calendar";
 
 interface Props {
+  section: CampusTab;
   lmsData: LmsStateData;
   students: { username: string; studentName: string }[];
   onRefresh: () => void;
   showToast: (msg: string, type?: ToastType) => void;
 }
 
-const TABS: { id: CampusTab; label: string }[] = [
+export const CAMPUS_TABS: { id: CampusTab; label: string }[] = [
+  { id: "profiles", label: "Student Profiles & Classroom" },
   { id: "announcements", label: "Announcements" },
   { id: "timetable", label: "Timetable" },
   { id: "attendance", label: "Attendance" },
@@ -49,8 +51,12 @@ const row: React.CSSProperties = {
   fontSize: "0.84rem",
 };
 
-export default function AdminCampusManager({ lmsData, students, onRefresh, showToast }: Props) {
-  const [tab, setTab] = useState<CampusTab>("announcements");
+export default function AdminCampusManager({ section, lmsData, students, onRefresh, showToast }: Props) {
+  const tab = section;
+  const [pfSubjects, setPfSubjects] = useState("");
+  const [pfGoals, setPfGoals] = useState("");
+  const [pfBio, setPfBio] = useState("");
+  const [pfLive, setPfLive] = useState("");
   const [busy, setBusy] = useState(false);
 
   // shared target student ("ALL" or username)
@@ -141,26 +147,70 @@ export default function AdminCampusManager({ lmsData, students, onRefresh, showT
 
   return (
     <div style={card}>
-      <h2 style={{ margin: "0 0 4px", fontSize: "1.15rem", fontWeight: 800 }}>
-        Campus & Communication Manager
+      <h2 style={{ margin: "0 0 14px", fontSize: "1.15rem", fontWeight: 800 }}>
+        {CAMPUS_TABS.find((t) => t.id === tab)?.label}
       </h2>
-      <p style={{ margin: "0 0 14px", fontSize: "0.82rem", color: "#64748b" }}>
-        Manage timetables, attendance, learning materials, messages, support tickets and calendar events.
-      </p>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-        {TABS.map((t) => (
+      {tab === "profiles" && (
+        <>
+          <div style={grid}>
+            <div className="form-group">
+              <label className="form-label">Student</label>
+              <select
+                className="form-select"
+                value={target}
+                onChange={(e) => {
+                  const u = e.target.value;
+                  setTarget(u);
+                  const rec: any = (lmsData as any).progressRecords?.[u.toUpperCase()];
+                  setPfSubjects((rec?.enrolledSubjects || []).join(", "));
+                  setPfGoals((rec?.learningGoals || []).join("\n"));
+                  setPfBio(rec?.bioNote || "");
+                  setPfLive(rec?.liveClassroomUrl || "");
+                }}
+              >
+                <option value="ALL">Select a student…</option>
+                {students.map((s) => (
+                  <option key={s.username} value={s.username}>
+                    {s.studentName} ({s.username})
+                  </option>
+                ))}
+              </select>
+            </div>
+            {input("Enrolled subjects (comma separated)", pfSubjects, setPfSubjects)}
+            {input("Live classroom link", pfLive, setPfLive, "url", "https://…")}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Learning goals (one per line)</label>
+            <textarea className="form-input" rows={3} value={pfGoals} onChange={(e) => setPfGoals(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Profile note</label>
+            <textarea className="form-input" rows={2} value={pfBio} onChange={(e) => setPfBio(e.target.value)} />
+          </div>
           <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={tab === t.id ? "btn btn-primary" : "btn btn-outline"}
-            style={{ padding: "6px 14px", fontSize: "0.8rem" }}
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={() => {
+              if (needStudent()) return;
+              post(
+                {
+                  action: "update-student-profile",
+                  studentUsername: target,
+                  studentName: nameOf(target),
+                  enrolledSubjects: pfSubjects.split(",").map((s) => s.trim()).filter(Boolean),
+                  learningGoals: pfGoals.split("\n").map((s) => s.trim()).filter(Boolean),
+                  bioNote: pfBio,
+                  liveClassroomUrl: pfLive,
+                },
+                false
+              );
+            }}
           >
-            {t.label}
+            Save Student Profile
           </button>
-        ))}
-      </div>
+        </>
+      )}
 
       {tab === "announcements" && (
         <>
