@@ -900,16 +900,26 @@ export async function POST(request: Request) {
         parentEmail,
         grade = "Grade 2",
         courseName = "English Phonics & Reading",
-        termPeriod = "Current Academic Term • 2026",
+        termPeriod = "First Term • 2026",
+        dateRangeStart = "",
+        dateRangeEnd = "",
         attendanceRate = 96,
         lessonsCompleted = 18,
         learningHours = 22,
         homeworkCompletionRate = 95,
+        homeworkSummary,
         readingProgress = 88,
+        aiLearningSummary,
         subjectScores = [],
         strengths = [],
         areasForImprovement = [],
+        recommendations = [],
+        teacherName = "Bright Path Class Teacher",
         teacherComment = "Shows remarkable curiosity and steady improvement in 1-on-1 live classes.",
+        adminName = "Bright Path Academic Director",
+        schoolRemarks = "",
+        published = true,
+        includeSections,
         portalUrl,
       } = body;
 
@@ -949,9 +959,20 @@ export async function POST(request: Request) {
           scoresList.length
       );
       const overallGrade =
-        avgScore >= 90 ? "A+" : avgScore >= 80 ? "A" : avgScore >= 70 ? "B+" : "B";
+        avgScore >= 90
+          ? "A+"
+          : avgScore >= 80
+          ? "A"
+          : avgScore >= 70
+          ? "B+"
+          : avgScore >= 60
+          ? "B"
+          : avgScore >= 50
+          ? "C"
+          : "D";
 
       const reportRef = `BPRC-${Math.floor(10000 + Math.random() * 90000)}`;
+      const isPublished = Boolean(published);
 
       const newReport: StudentReportCard = {
         id: `rc-${Date.now()}`,
@@ -963,13 +984,17 @@ export async function POST(request: Request) {
         grade: String(grade),
         courseName: String(courseName),
         termPeriod: String(termPeriod),
+        dateRangeStart: String(dateRangeStart || ""),
+        dateRangeEnd: String(dateRangeEnd || ""),
         attendanceRate: Number(attendanceRate),
         lessonsCompleted: Number(lessonsCompleted),
         learningHours: Number(learningHours),
         homeworkCompletionRate: Number(homeworkCompletionRate),
+        homeworkSummary: homeworkSummary || undefined,
         overallScore: avgScore,
         overallGrade,
         readingProgress: Number(readingProgress),
+        aiLearningSummary: aiLearningSummary || undefined,
         subjectScores: scoresList,
         strengths:
           Array.isArray(strengths) && strengths.length > 0
@@ -986,21 +1011,47 @@ export async function POST(request: Request) {
                 "Practising multi-syllable vocabulary pronunciation aloud",
                 "Using more descriptive adjectives in creative writing",
               ],
+        recommendations:
+          Array.isArray(recommendations) && recommendations.length > 0
+            ? recommendations
+            : [
+                "Complete 15 minutes of daily reading aloud with Bright Buddy",
+                "Review weekly phonics flashcards and spelling words with parent",
+              ],
+        teacherName: String(teacherName || "Bright Path Class Teacher"),
         teacherComment: String(teacherComment),
-        issuedBy: "Bright Path Academic Director",
+        adminName: String(adminName || "Bright Path Academic Director"),
+        schoolRemarks: String(
+          schoolRemarks ||
+            `${studentName || "This student"} has demonstrated commendable dedication this term. Bright Path Learning Hub is proud of their academic growth.`
+        ),
+        issuedBy: String(adminName || "Bright Path Academic Director"),
+        published: isPublished,
+        includeSections: includeSections || {
+          attendance: true,
+          homework: true,
+          assessments: true,
+          aiProgress: true,
+          strengthsWeaknesses: true,
+          recommendations: true,
+          teacherComments: true,
+          adminComments: true,
+        },
         createdAt: new Date().toISOString(),
       };
 
       lms.reportCards.unshift(newReport);
 
-      lms.notifications.unshift({
-        id: `notif-rc-${Date.now()}`,
-        targetStudentUsername: cleanUser,
-        type: "report",
-        title: `New Academic Report Card Issued (${reportRef})`,
-        message: `Overall Grade: ${overallGrade} (${avgScore}%) • Click 'My Reports' to view and download your official PDF Report Card.`,
-        createdAt: new Date().toISOString(),
-      });
+      if (isPublished) {
+        lms.notifications.unshift({
+          id: `notif-rc-${Date.now()}`,
+          targetStudentUsername: cleanUser,
+          type: "report",
+          title: `New Academic Report Card Published (${reportRef} • ${termPeriod})`,
+          message: `Overall Grade: ${overallGrade} (${avgScore}%) • Open 'My Reports' to view, print, or download your official PDF Report Card.`,
+          createdAt: new Date().toISOString(),
+        });
+      }
 
       await saveLmsData(lms);
 
@@ -1011,7 +1062,7 @@ export async function POST(request: Request) {
         }/portal`;
 
       let emailSent = false;
-      if (newReport.parentEmail && newReport.parentEmail.includes("@")) {
+      if (isPublished && newReport.parentEmail && newReport.parentEmail.includes("@")) {
         try {
           const emailRes = await sendReportCardEmail(newReport, resolvedPortalUrl);
           emailSent = emailRes.sent;
@@ -1022,11 +1073,58 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         success: true,
-        message: emailSent
-          ? `Report Card ${reportRef} generated & sent via HTML email to ${newReport.parentEmail}!`
-          : `Report Card ${reportRef} generated and published to Student & Parent Portal!`,
+        message: !isPublished
+          ? `Report Card ${reportRef} saved as Draft! Click 'Publish to Portal' when ready.`
+          : emailSent
+          ? `Report Card ${reportRef} published to Student & Parent Portals and emailed to ${newReport.parentEmail}!`
+          : `Report Card ${reportRef} generated and published to Student & Parent Portals!`,
         reportCard: newReport,
         emailSent,
+      });
+    }
+
+    // 7B. TEACHER/ADMIN: Toggle Publish Status of Report Card to Student & Parent Portals
+    if (action === "toggle-report-publish") {
+      const { reportId } = body;
+      const rc = lms.reportCards.find((r) => r.id === reportId);
+      if (!rc) {
+        return NextResponse.json(
+          { success: false, message: "Report card not found." },
+          { status: 404 }
+        );
+      }
+      const nextPublished = rc.published === false ? true : false;
+      rc.published = nextPublished;
+
+      if (nextPublished) {
+        lms.notifications.unshift({
+          id: `notif-rc-pub-${Date.now()}`,
+          targetStudentUsername: rc.studentUsername,
+          type: "report",
+          title: `Academic Report Card Published (${rc.reportRef} • ${rc.termPeriod})`,
+          message: `Your ${rc.termPeriod} Report Card is now available in 'My Reports' for viewing, printing, and PDF download.`,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message: nextPublished
+          ? `Report Card ${rc.reportRef} is now published to Student & Parent Portals!`
+          : `Report Card ${rc.reportRef} moved to unpublished Draft state.`,
+        reportCard: rc,
+      });
+    }
+
+    // 7C. TEACHER/ADMIN: Delete Report Card
+    if (action === "delete-report-card") {
+      const { reportId } = body;
+      lms.reportCards = lms.reportCards.filter((r) => r.id !== reportId);
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message: "Report card deleted.",
       });
     }
 

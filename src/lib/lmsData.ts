@@ -203,6 +203,32 @@ export interface AiPracticeLog {
   createdAt: string;
 }
 
+export interface ReportIncludeSections {
+  attendance: boolean;
+  homework: boolean;
+  assessments: boolean;
+  aiProgress: boolean;
+  strengthsWeaknesses: boolean;
+  recommendations: boolean;
+  teacherComments: boolean;
+  adminComments: boolean;
+}
+
+export interface ReportAiLearningSummary {
+  sessionsCompleted: number;
+  averageAiScore: number;
+  readingProgress: number;
+  skillsPractised: string[];
+  masteryHighlight: string;
+}
+
+export interface ReportHomeworkSummary {
+  completionRate: number;
+  averageScore: number;
+  totalSubmitted: number;
+  totalAssigned: number;
+}
+
 export interface StudentReportCard {
   id: string;
   reportRef: string;
@@ -213,23 +239,34 @@ export interface StudentReportCard {
   grade: string;
   courseName: string;
   termPeriod: string;
+  dateRangeStart?: string;
+  dateRangeEnd?: string;
   attendanceRate: number;
   lessonsCompleted: number;
   learningHours: number;
   homeworkCompletionRate: number;
+  homeworkSummary?: ReportHomeworkSummary;
   overallScore: number;
   overallGrade: string;
   readingProgress: number;
+  aiLearningSummary?: ReportAiLearningSummary;
   subjectScores: {
     subject: string;
+    beforeScore?: number;
     score: number;
     grade: string;
     remark: string;
   }[];
   strengths: string[];
   areasForImprovement: string[];
+  recommendations?: string[];
+  teacherName?: string;
   teacherComment: string;
+  adminName?: string;
+  schoolRemarks?: string;
   issuedBy: string;
+  published?: boolean;
+  includeSections?: ReportIncludeSections;
   createdAt: string;
 }
 

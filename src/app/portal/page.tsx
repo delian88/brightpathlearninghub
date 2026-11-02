@@ -123,6 +123,8 @@ export default function StudentPortalPage() {
   const [assignments, setAssignments] = useState<HomeworkAssignment[]>([]);
   const [submissions, setSubmissions] = useState<HomeworkSubmission[]>([]);
   const [reportCards, setReportCards] = useState<StudentReportCard[]>([]);
+  const [selectedReportTermFilter, setSelectedReportTermFilter] = useState<string>("ALL");
+  const [viewingReportCardId, setViewingReportCardId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<PortalNotification[]>([]);
   const [progress, setProgress] = useState<StudentProgressRecord | null>(null);
   const [aiLogs, setAiLogs] = useState<AiPracticeLog[]>([]);
@@ -2670,139 +2672,517 @@ export default function StudentPortalPage() {
         )}
 
         {/* ===================================================================
-            TAB: MY REPORTS (View & Download Official PDF Report Cards)
+            TAB: MY REPORTS (View, Print & Download Official Branded PDF Reports)
             =================================================================== */}
-        {activeTab === "reports" && (
-          <div style={{ background: "#ffffff", borderRadius: 18, padding: 24, border: "1px solid #e2e8f0" }}>
-            <h2 style={{ margin: "0 0 6px", fontSize: "1.2rem", fontWeight: 800 }}>
-              📄 Official Downloadable PDF Report Cards
-            </h2>
-            <p style={{ margin: "0 0 18px", fontSize: "0.85rem", color: "#64748b" }}>
-              Download official termly PDF report cards prepared by your teacher.
-            </p>
+        {activeTab === "reports" && (() => {
+          const publishedReports = reportCards.filter((rc) => rc.published !== false);
+          const availableTerms = Array.from(
+            new Set(publishedReports.map((rc) => rc.termPeriod).filter(Boolean))
+          );
+          const filteredReports =
+            selectedReportTermFilter === "ALL"
+              ? publishedReports
+              : publishedReports.filter((rc) => rc.termPeriod === selectedReportTermFilter);
+          const activePreviewReport =
+            filteredReports.find((rc) => rc.id === viewingReportCardId) ||
+            filteredReports[0] ||
+            null;
 
-            {reportCards.length === 0 ? (
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Top Header & Term Filter Bar (View Current & Previous Terms' Reports) */}
               <div
                 style={{
-                  padding: "32px 20px",
-                  borderRadius: 14,
-                  background: "#f8fafc",
-                  border: "1px dashed #cbd5e1",
-                  textAlign: "center",
+                  background: "#ffffff",
+                  borderRadius: 18,
+                  padding: 24,
+                  border: "1px solid #e2e8f0",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 14,
                 }}
               >
-                <p style={{ fontWeight: 700, color: "#334155", marginBottom: 8 }}>
-                  No custom report cards issued yet for {studentAccount.studentName}.
-                </p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    downloadReportCardPdf({
-                      id: "sample-rc",
-                      reportRef: `BPRC-SAMPLE`,
-                      studentUsername: studentAccount.username,
-                      studentName: studentAccount.studentName,
-                      parentName: studentAccount.parentName,
-                      parentEmail: studentAccount.email || "",
-                      grade: studentAccount.grade,
-                      courseName: studentAccount.courseName,
-                      termPeriod: "Current Academic Term • 2026",
-                      attendanceRate,
-                      lessonsCompleted,
-                      learningHours,
-                      homeworkCompletionRate: hwCompletionRate,
-                      overallScore: avgAssessmentScore,
-                      overallGrade: avgAssessmentScore >= 90 ? "A+" : "A",
-                      readingProgress,
-                      subjectScores: [
-                        {
-                          subject: "English Phonics & Reading Fluency",
-                          score: readingProgress,
-                          grade: "A",
-                          remark: "Consistent progress in phonemic decoding and reading aloud",
-                        },
-                        {
-                          subject: "Word Pronunciation & Public Speaking",
-                          score: 88,
-                          grade: "A",
-                          remark: "Clear articulation and growing confidence",
-                        },
-                        {
-                          subject: "Creative Writing & Grammar",
-                          score: 84,
-                          grade: "A",
-                          remark: "Good sentence formation and punctuation",
-                        },
-                      ],
-                      strengths: progress?.customStrengths || [
-                        "Enthusiastic learner in 1-on-1 classes",
-                      ],
-                      areasForImprovement: progress?.customImprovements || [
-                        "Continue daily 10-minute reading aloud practice",
-                      ],
-                      teacherComment: `${studentAccount.studentName} is making commendable progress in ${studentAccount.courseName}.`,
-                      issuedBy: "Bright Path Academic Director",
-                      createdAt: new Date().toISOString(),
-                    })
-                  }
-                  className="btn btn-primary"
-                  style={{ padding: "10px 18px", fontSize: "0.85rem" }}
-                >
-                  <Download size={16} /> Download Current Progress Report Card (PDF)
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {reportCards.map((rc) => (
-                  <div
-                    key={rc.id}
+                <div>
+                  <h2 style={{ margin: "0 0 4px", fontSize: "1.22rem", fontWeight: 900, color: "#0f172a" }}>
+                    📄 Academic Reports & Branded PDF Downloads
+                  </h2>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>
+                    View your official termly academic report cards, browse previous terms, print reports, or download branded PDFs.
+                  </p>
+                </div>
+
+                {/* Term Filter for Viewing Previous Terms' Reports */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#475569" }}>
+                    Academic Term:
+                  </span>
+                  <select
+                    value={selectedReportTermFilter}
+                    onChange={(e) => {
+                      setSelectedReportTermFilter(e.target.value);
+                      setViewingReportCardId(null);
+                    }}
                     style={{
-                      padding: 20,
-                      borderRadius: 16,
+                      padding: "8px 14px",
+                      borderRadius: 10,
                       border: "1px solid #cbd5e1",
                       background: "#f8fafc",
-                      display: "flex",
-                      flexWrap: "wrap",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 16,
+                      fontSize: "0.82rem",
+                      fontWeight: 800,
+                      color: "#0f172a",
                     }}
                   >
-                    <div>
-                      <span
-                        style={{
-                          background: "#eff6ff",
-                          color: "#1d4ed8",
-                          padding: "3px 10px",
-                          borderRadius: 999,
-                          fontSize: "0.72rem",
-                          fontWeight: 800,
-                        }}
-                      >
-                        REF #{rc.reportRef} • {rc.termPeriod}
-                      </span>
-                      <h3 style={{ margin: "6px 0 4px", fontSize: "1.1rem", fontWeight: 800 }}>
-                        {rc.studentName} — Overall Grade: {rc.overallGrade} ({rc.overallScore}%)
-                      </h3>
-                      <p style={{ margin: 0, fontSize: "0.84rem", color: "#475569" }}>
-                        Teacher Remark: &ldquo;{rc.teacherComment}&rdquo;
-                      </p>
-                    </div>
+                    <option value="ALL">All Academic Terms ({publishedReports.length})</option>
+                    {availableTerms.map((term) => (
+                      <option key={term} value={term}>
+                        {term}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
+              {filteredReports.length === 0 ? (
+                <div
+                  style={{
+                    padding: "36px 24px",
+                    borderRadius: 18,
+                    background: "#ffffff",
+                    border: "1px dashed #cbd5e1",
+                    textAlign: "center",
+                  }}
+                >
+                  <p style={{ fontWeight: 800, fontSize: "1rem", color: "#0f172a", marginBottom: 6 }}>
+                    No published report cards yet for {studentAccount.studentName}.
+                  </p>
+                  <p style={{ fontSize: "0.84rem", color: "#64748b", marginBottom: 16 }}>
+                    You can still preview, print, or download a live progress report card below while your teacher prepares the official term report.
+                  </p>
+                  <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
                     <button
                       type="button"
-                      onClick={() => downloadReportCardPdf(rc)}
-                      className="btn btn-primary shining"
-                      style={{ padding: "10px 18px", fontSize: "0.84rem" }}
+                      onClick={() =>
+                        downloadReportCardPdf(
+                          {
+                            id: "sample-rc",
+                            reportRef: "BPRC-LIVE",
+                            studentUsername: studentAccount.username,
+                            studentName: studentAccount.studentName,
+                            parentName: studentAccount.parentName,
+                            parentEmail: studentAccount.email || "",
+                            grade: studentAccount.grade,
+                            courseName: studentAccount.courseName,
+                            termPeriod: "First Term • 2026",
+                            dateRangeStart: new Date(Date.now() - 45 * 86400000)
+                              .toISOString()
+                              .split("T")[0],
+                            dateRangeEnd: new Date().toISOString().split("T")[0],
+                            attendanceRate,
+                            lessonsCompleted,
+                            learningHours,
+                            homeworkCompletionRate: hwCompletionRate,
+                            overallScore: avgAssessmentScore,
+                            overallGrade: avgAssessmentScore >= 90 ? "A+" : "A",
+                            readingProgress,
+                            subjectScores: [
+                              {
+                                subject: "English Phonics & Reading Fluency",
+                                score: readingProgress,
+                                grade: "A",
+                                remark: "Consistent progress in phonemic decoding and reading aloud",
+                              },
+                              {
+                                subject: "Word Pronunciation & Public Speaking",
+                                score: 88,
+                                grade: "A",
+                                remark: "Clear articulation and growing confidence",
+                              },
+                              {
+                                subject: "Creative Writing & Grammar",
+                                score: 84,
+                                grade: "A",
+                                remark: "Good sentence formation and punctuation",
+                              },
+                            ],
+                            strengths: progress?.customStrengths || [
+                              "Enthusiastic learner in 1-on-1 classes",
+                            ],
+                            areasForImprovement: progress?.customImprovements || [
+                              "Continue daily 10-minute reading aloud practice",
+                            ],
+                            recommendations: progress?.improvementRecommendations || [
+                              "Practise daily reading aloud with Bright Buddy for 15 minutes",
+                            ],
+                            teacherName: "Bright Path Class Educator",
+                            teacherComment: `${studentAccount.studentName} is making commendable progress in ${studentAccount.courseName}.`,
+                            adminName: "Bright Path Academic Director",
+                            schoolRemarks: `${studentAccount.studentName} demonstrates strong curiosity and commitment to learning.`,
+                            issuedBy: "Bright Path Academic Director",
+                            createdAt: new Date().toISOString(),
+                          },
+                          "download"
+                        )
+                      }
+                      className="btn btn-primary"
+                      style={{ padding: "10px 18px", fontSize: "0.85rem" }}
                     >
-                      <Download size={16} /> Download Official PDF Report
+                      <Download size={16} /> Download Live Progress Report (PDF)
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                </div>
+              ) : (
+                <>
+                  {/* List of Available & Previous Term Reports */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {filteredReports.map((rc) => {
+                      const isSelected = activePreviewReport?.id === rc.id;
+                      return (
+                        <div
+                          key={rc.id}
+                          style={{
+                            padding: 20,
+                            borderRadius: 16,
+                            border: isSelected ? "2px solid #1d4ed8" : "1px solid #cbd5e1",
+                            background: isSelected ? "#eff6ff" : "#ffffff",
+                            display: "flex",
+                            flexWrap: "wrap",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 16,
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <span
+                                style={{
+                                  background: "#1e3a8a",
+                                  color: "#ffffff",
+                                  padding: "3px 10px",
+                                  borderRadius: 999,
+                                  fontSize: "0.72rem",
+                                  fontWeight: 800,
+                                }}
+                              >
+                                REF #{rc.reportRef} • {rc.termPeriod}
+                              </span>
+                              {rc.dateRangeStart && rc.dateRangeEnd && (
+                                <span
+                                  style={{
+                                    background: "#f1f5f9",
+                                    color: "#475569",
+                                    padding: "3px 10px",
+                                    borderRadius: 999,
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  📅 {rc.dateRangeStart} to {rc.dateRangeEnd}
+                                </span>
+                              )}
+                              <span
+                                style={{
+                                  background: "#dcfce7",
+                                  color: "#15803d",
+                                  padding: "3px 10px",
+                                  borderRadius: 999,
+                                  fontSize: "0.72rem",
+                                  fontWeight: 800,
+                                }}
+                              >
+                                Overall Grade: {rc.overallGrade} ({rc.overallScore}%)
+                              </span>
+                            </div>
+                            <h3 style={{ margin: "6px 0 4px", fontSize: "1.08rem", fontWeight: 900, color: "#0f172a" }}>
+                              {rc.studentName} — {rc.grade} ({rc.courseName})
+                            </h3>
+                            <p style={{ margin: 0, fontSize: "0.83rem", color: "#475569" }}>
+                              Teacher ({rc.teacherName || "Bright Path Educator"}): &ldquo;{rc.teacherComment}&rdquo;
+                            </p>
+                          </div>
+
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button
+                              type="button"
+                              onClick={() => setViewingReportCardId(rc.id)}
+                              style={{
+                                background: isSelected ? "#1d4ed8" : "#ffffff",
+                                color: isSelected ? "#ffffff" : "#1d4ed8",
+                                border: "1px solid #1d4ed8",
+                                padding: "9px 14px",
+                                borderRadius: 9,
+                                fontSize: "0.8rem",
+                                fontWeight: 800,
+                                cursor: "pointer",
+                              }}
+                            >
+                              👁️ {isSelected ? "Viewing Below" : "View Report"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => downloadReportCardPdf(rc, "print")}
+                              style={{
+                                background: "#f8fafc",
+                                color: "#0f172a",
+                                border: "1px solid #cbd5e1",
+                                padding: "9px 14px",
+                                borderRadius: 9,
+                                fontSize: "0.8rem",
+                                fontWeight: 800,
+                                cursor: "pointer",
+                              }}
+                            >
+                              🖨️ Print Report
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => downloadReportCardPdf(rc, "download")}
+                              className="btn btn-primary shining"
+                              style={{ padding: "9px 16px", fontSize: "0.82rem" }}
+                            >
+                              <Download size={15} /> Download PDF
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Inline Branded Report Card Preview Sheet */}
+                  {activePreviewReport && (
+                    <div
+                      style={{
+                        background: "#ffffff",
+                        borderRadius: 18,
+                        border: "2px solid #0a1931",
+                        overflow: "hidden",
+                        boxShadow: "0 12px 32px rgba(15, 23, 42, 0.08)",
+                      }}
+                    >
+                      {/* Branded Header with Logo */}
+                      <div
+                        style={{
+                          background: "linear-gradient(135deg, #071527 0%, #133e87 100%)",
+                          color: "#ffffff",
+                          padding: "22px 26px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: 14,
+                          borderBottom: "4px solid #f59e0b",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          <Image
+                            src="/logo.png"
+                            alt="Bright Path Learning Hub Logo"
+                            width={60}
+                            height={60}
+                            style={{
+                              borderRadius: "50%",
+                              background: "#ffffff",
+                              padding: 4,
+                              border: "2px solid #fbbf24",
+                              objectFit: "contain",
+                            }}
+                          />
+                          <div>
+                            <div
+                              style={{
+                                display: "inline-block",
+                                background: "rgba(251, 191, 36, 0.2)",
+                                color: "#fbbf24",
+                                padding: "3px 10px",
+                                borderRadius: 999,
+                                fontSize: "0.68rem",
+                                fontWeight: 800,
+                                marginBottom: 4,
+                              }}
+                            >
+                              OFFICIAL ACADEMIC REPORT CARD • GOVT. REG. NO. 9840276
+                            </div>
+                            <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 900 }}>
+                              Bright Path Learning Hub
+                            </h3>
+                            <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "#cbd5e1" }}>
+                              1-on-1 Personalized Live Learning & AI Companion Portal
+                            </p>
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#fbbf24", fontWeight: 800 }}>
+                            REPORT REF #{activePreviewReport.reportRef}
+                          </div>
+                          <div style={{ fontSize: "1rem", fontWeight: 900 }}>
+                            {activePreviewReport.termPeriod}
+                          </div>
+                          <div style={{ fontSize: "0.74rem", color: "#cbd5e1" }}>
+                            Issued: {new Date(activePreviewReport.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ padding: 24 }}>
+                        {/* Student, Class, Term, Date Range & Teacher Metadata */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))",
+                            gap: 12,
+                            background: "#f8fafc",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: 12,
+                            padding: 16,
+                            marginBottom: 18,
+                            fontSize: "0.82rem",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>
+                              Student Name
+                            </div>
+                            <div style={{ fontWeight: 900, color: "#0f172a" }}>
+                              {activePreviewReport.studentName}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>
+                              Class / Program
+                            </div>
+                            <div style={{ fontWeight: 900, color: "#059669" }}>
+                              {activePreviewReport.grade} • {activePreviewReport.courseName}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>
+                              Academic Term & Date Range
+                            </div>
+                            <div style={{ fontWeight: 800, color: "#0f172a" }}>
+                              {activePreviewReport.termPeriod}
+                              {activePreviewReport.dateRangeStart && activePreviewReport.dateRangeEnd
+                                ? ` (${activePreviewReport.dateRangeStart} – ${activePreviewReport.dateRangeEnd})`
+                                : ""}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>
+                              Class Teacher
+                            </div>
+                            <div style={{ fontWeight: 800, color: "#0f172a" }}>
+                              {activePreviewReport.teacherName || "Bright Path Class Educator"}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Subject Evaluations Table */}
+                        <div style={{ overflowX: "auto", marginBottom: 16 }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
+                            <thead>
+                              <tr style={{ background: "#0a1931", color: "#ffffff", textAlign: "left" }}>
+                                <th style={{ padding: "10px 12px" }}>Subject / Competency</th>
+                                <th style={{ padding: "10px 12px" }}>Score</th>
+                                <th style={{ padding: "10px 12px" }}>Grade</th>
+                                <th style={{ padding: "10px 12px" }}>Teacher Assessment Remark</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {activePreviewReport.subjectScores.map((s, idx) => (
+                                <tr key={idx} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                                  <td style={{ padding: "10px 12px", fontWeight: 800 }}>{s.subject}</td>
+                                  <td style={{ padding: "10px 12px", fontWeight: 900, color: "#059669" }}>
+                                    {s.score}%
+                                  </td>
+                                  <td style={{ padding: "10px 12px" }}>
+                                    <span
+                                      style={{
+                                        background: "#eff6ff",
+                                        color: "#1d4ed8",
+                                        padding: "2px 9px",
+                                        borderRadius: 999,
+                                        fontWeight: 800,
+                                        fontSize: "0.75rem",
+                                      }}
+                                    >
+                                      {s.grade}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: "10px 12px", color: "#475569" }}>{s.remark}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Grading Scale Key */}
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            background: "#f8fafc",
+                            padding: "10px 14px",
+                            borderRadius: 10,
+                            border: "1px solid #e2e8f0",
+                            fontSize: "0.74rem",
+                            fontWeight: 700,
+                            marginBottom: 18,
+                          }}
+                        >
+                          <strong>Grading Information:</strong>
+                          <span style={{ color: "#047857" }}>A+ (90–100% Distinction)</span> •
+                          <span style={{ color: "#059669" }}>A (80–89% Excellent)</span> •
+                          <span style={{ color: "#1d4ed8" }}>B+ (70–79% Very Good)</span> •
+                          <span style={{ color: "#4338ca" }}>B (60–69% Good)</span> •
+                          <span style={{ color: "#b45309" }}>C (50–59% Developing)</span> •
+                          <span style={{ color: "#dc2626" }}>D (&lt;50% Needs Support)</span>
+                        </div>
+
+                        {/* Teacher & School Administrator Remarks */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+                          <div
+                            style={{
+                              background: "#f8fafc",
+                              borderLeft: "4px solid #133e87",
+                              padding: 14,
+                              borderRadius: 10,
+                              fontSize: "0.84rem",
+                            }}
+                          >
+                            <div style={{ fontWeight: 900, color: "#0f172a", marginBottom: 4 }}>
+                              👩‍🏫 Teacher&#39;s Comment ({activePreviewReport.teacherName || "Bright Path Educator"}):
+                            </div>
+                            <div style={{ color: "#334155" }}>{activePreviewReport.teacherComment}</div>
+                          </div>
+
+                          <div
+                            style={{
+                              background: "#fefce8",
+                              borderLeft: "4px solid #d97706",
+                              padding: 14,
+                              borderRadius: 10,
+                              fontSize: "0.84rem",
+                            }}
+                          >
+                            <div style={{ fontWeight: 900, color: "#92400e", marginBottom: 4 }}>
+                              🏛️ School Remarks ({activePreviewReport.adminName || activePreviewReport.issuedBy || "Academic Director"}):
+                            </div>
+                            <div style={{ color: "#78350f" }}>
+                              {activePreviewReport.schoolRemarks ||
+                                `${activePreviewReport.studentName} continues to uphold the learning standards of Bright Path Learning Hub.`}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ===================================================================
             TAB: REWARDS & BADGES
