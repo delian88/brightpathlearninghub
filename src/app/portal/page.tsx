@@ -40,6 +40,7 @@ import ToastNotification, { type ToastData, type ToastType } from "@/components/
 import StudentHomeworkModule from "@/components/StudentHomeworkModule";
 import BrightBuddyModule from "@/components/BrightBuddyModule";
 import StudentProgressModule from "@/components/StudentProgressModule";
+import StudentRewardsModule from "@/components/StudentRewardsModule";
 import {
   DEFAULT_AVATARS,
   READING_PRACTICE_PASSAGES,
@@ -128,6 +129,12 @@ export default function StudentPortalPage() {
   const [notifications, setNotifications] = useState<PortalNotification[]>([]);
   const [progress, setProgress] = useState<StudentProgressRecord | null>(null);
   const [aiLogs, setAiLogs] = useState<AiPracticeLog[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [leaderboardSettings, setLeaderboardSettings] = useState<any>({
+    enabled: true,
+    anonymizeNames: true,
+    hideForEarlyYears: true,
+  });
   const [syncingLms, setSyncingLms] = useState(false);
 
   // Homework Taking State
@@ -220,6 +227,8 @@ export default function StudentPortalPage() {
         setNotifications(data.notifications || []);
         setProgress(data.progress || null);
         setAiLogs(data.aiLogs || []);
+        if (Array.isArray(data.leaderboard)) setLeaderboard(data.leaderboard);
+        if (data.leaderboardSettings) setLeaderboardSettings(data.leaderboardSettings);
       }
     } catch (err) {
       console.error("Failed to fetch student LMS data:", err);
@@ -3185,36 +3194,22 @@ export default function StudentPortalPage() {
         })()}
 
         {/* ===================================================================
-            TAB: REWARDS & BADGES
+            TAB: REWARDS & BADGES (Module F: Points, Badges, Streaks, Certificates & Leaderboard)
             =================================================================== */}
         {activeTab === "badges" && (
-          <div style={{ background: "#ffffff", borderRadius: 18, padding: 24, border: "1px solid #e2e8f0" }}>
-            <h2 style={{ margin: "0 0 6px", fontSize: "1.2rem", fontWeight: 800 }}>
-              🏅 My Earned Rewards & Achievement Badges ({badgesList.length})
-            </h2>
-            <p style={{ margin: "0 0 18px", fontSize: "0.85rem", color: "#64748b" }}>
-              Complete homework, read aloud to AI Buddy, and attend 1:1 classes to unlock new badges!
-            </p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16 }}>
-              {badgesList.map((b) => (
-                <div
-                  key={b.id}
-                  style={{
-                    borderRadius: 16,
-                    padding: 20,
-                    background: "#f8fafc",
-                    border: `2px solid ${b.color || "#f59e0b"}`,
-                    textAlign: "center",
-                  }}
-                >
-                  <div style={{ fontSize: "2.6rem", marginBottom: 8 }}>{b.icon}</div>
-                  <div style={{ fontWeight: 800, fontSize: "1rem", color: "#0f172a" }}>{b.title}</div>
-                  <p style={{ fontSize: "0.8rem", color: "#475569", margin: "6px 0 0" }}>{b.description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          <StudentRewardsModule
+            studentName={studentAccount.studentName}
+            studentUsername={studentAccount.username}
+            grade={studentAccount.grade || "All Grades"}
+            courseName={studentAccount.courseName || "English Phonics & Reading"}
+            progress={progress}
+            submissions={submissions}
+            aiLogs={aiLogs}
+            leaderboard={leaderboard}
+            leaderboardSettings={leaderboardSettings}
+            onProfileUpdated={() => fetchStudentLmsData(studentAccount)}
+            showToast={showToast}
+          />
         )}
 
         {/* ===================================================================

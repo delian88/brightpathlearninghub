@@ -3,6 +3,7 @@ import { getLmsData, saveLmsData } from "@/db";
 import {
   getOrCreateStudentProgress,
   evaluateHomeworkQuestion,
+  computeStudentRewardsAndAchievements,
   type HomeworkAssignment,
   type HomeworkQuestion,
   type HomeworkSubmission,
@@ -12,6 +13,7 @@ import {
   type StudentReportCard,
   type PortalNotification,
   type AiPracticeLog,
+  type BadgeCategory,
 } from "@/lib/lmsData";
 import { sendReportCardEmail } from "@/lib/email";
 
@@ -93,6 +95,58 @@ export async function GET(request: Request) {
         (log) => log.studentUsername.toUpperCase() === studentUsername
       );
 
+      const leaderboardSettings = lms.leaderboardSettings || {
+        enabled: true,
+        anonymizeNames: true,
+        hideForEarlyYears: true,
+      };
+
+      // Build privacy-controlled leaderboard across all progress records
+      const leaderboard = Object.values(lms.progressRecords || {})
+        .filter((rec) => rec.leaderboardPrivacy !== "private")
+        .map((rec) => {
+          const u = rec.studentUsername.toUpperCase();
+          const subs = lms.submissions.filter(
+            (s) => s.studentUsername.toUpperCase() === u
+          );
+          const logs = lms.aiLogs.filter(
+            (l) => l.studentUsername.toUpperCase() === u
+          );
+          const rewards = computeStudentRewardsAndAchievements(
+            rec,
+            subs,
+            logs,
+            rec.studentName,
+            u
+          );
+          const nameParts = (rec.studentName || "Scholar").trim().split(/\s+/);
+          const initialsName =
+            nameParts.length > 1
+              ? `${nameParts[0]} ${nameParts[nameParts.length - 1][0]}.`
+              : nameParts[0];
+
+          const displayName =
+            u === studentUsername
+              ? `${rec.studentName} (You)`
+              : leaderboardSettings.anonymizeNames || rec.leaderboardPrivacy === "initials"
+              ? initialsName
+              : rec.studentName;
+
+          return {
+            studentUsername: u,
+            displayName,
+            avatarUrl: rec.avatarUrl,
+            totalPoints: rewards.totalPoints,
+            homeworkPoints: rewards.homeworkPoints,
+            streakDays: rewards.streakDays,
+            badgesCount: rewards.unlockedBadges.length,
+            starLevelTitle: rewards.starLevel.title,
+            isCurrentUser: u === studentUsername,
+          };
+        })
+        .sort((a, b) => b.totalPoints - a.totalPoints)
+        .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
       return NextResponse.json({
         success: true,
         assignments: assignedHomework,
@@ -101,6 +155,8 @@ export async function GET(request: Request) {
         notifications: myNotifications,
         progress,
         aiLogs: myAiLogs,
+        leaderboard,
+        leaderboardSettings,
       });
     }
 
@@ -827,6 +883,11 @@ export async function POST(request: Request) {
         improvementRecommendations,
         flaggedForAttention,
         flagReason,
+        bonusPoints,
+        streakDays,
+        activeDaysOfWeek,
+        leaderboardPrivacy,
+        earlyYearsFocusMode,
       } = body;
 
       const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
@@ -878,6 +939,21 @@ export async function POST(request: Request) {
       }
       if (flagReason !== undefined) {
         prog.flagReason = String(flagReason);
+      }
+      if (bonusPoints !== undefined) {
+        prog.bonusPoints = Number(bonusPoints);
+      }
+      if (streakDays !== undefined) {
+        prog.streakDays = Number(streakDays);
+      }
+      if (Array.isArray(activeDaysOfWeek)) {
+        prog.activeDaysOfWeek = activeDaysOfWeek;
+      }
+      if (leaderboardPrivacy) {
+        prog.leaderboardPrivacy = leaderboardPrivacy;
+      }
+      if (earlyYearsFocusMode !== undefined) {
+        prog.earlyYearsFocusMode = Boolean(earlyYearsFocusMode);
       }
 
       prog.updatedAt = new Date().toISOString();
@@ -1154,6 +1230,106 @@ export async function POST(request: Request) {
         success: true,
         message: "Notification sent to students & parents!",
         notification: notif,
+      });
+    }
+
+    // 9. MODULE F: TEACHER-AWARDED ACHIEVEMENTS (BADGES, BONUS POINTS & CERTIFICATES)
+    if (action === "award-student-achievement") {
+      const {
+        studentUsername,
+        studentName = "Bright Scholar",
+        grade = "All Grades",
+        courseName = "English Phonics & Reading",
+        awardType = "badge", // "badge" | "certificate" | "points"
+        title,
+        description,
+        icon = "🏅",
+        color = "#f59e0b",
+        category = "teacher-award" as BadgeCategory,
+        pointsValue = 50,
+        awardedBy = "Bright Path Class Teacher",
+      } = body;
+
+      const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
+      const prog = getOrCreateStudentProgress(lms, cleanUser, String(studentName));
+
+      if (awardType === "points") {
+        prog.bonusPoints = (prog.bonusPoints || 0) + Number(pointsValue || 50);
+      } else if (awardType === "certificate") {
+        if (!prog.certificates) prog.certificates = [];
+        const certRef = `BPCERT-${Math.floor(10000 + Math.random() * 90000)}`;
+        prog.certificates.unshift({
+          id: `cert-${Date.now()}`,
+          certRef,
+          studentUsername: cleanUser,
+          studentName: String(studentName),
+          grade: String(grade),
+          courseName: String(courseName),
+          title: String(title || "Certificate of Academic Excellence"),
+          citation: String(
+            description ||
+              `Awarded to ${studentName} for outstanding dedication and learning progress at Bright Path Learning Hub.`
+          ),
+          category: category || "teacher-award",
+          issuedBy: String(awardedBy || "Bright Path Academic Director"),
+          issuedAt: new Date().toISOString(),
+        });
+        prog.bonusPoints = (prog.bonusPoints || 0) + Number(pointsValue || 100);
+      } else {
+        if (!prog.badges) prog.badges = [];
+        prog.badges.unshift({
+          id: `badge-t-${Date.now()}`,
+          title: String(title || "Teacher's Star Achievement"),
+          description: String(description || "Awarded for outstanding effort in class!"),
+          icon: String(icon || "🌟"),
+          color: String(color || "#f59e0b"),
+          category: category || "teacher-award",
+          awardedBy: String(awardedBy || "Bright Path Teacher"),
+          pointsValue: Number(pointsValue || 50),
+          earnedAt: new Date().toISOString(),
+        });
+      }
+
+      prog.updatedAt = new Date().toISOString();
+      lms.progressRecords[cleanUser] = prog;
+
+      lms.notifications.unshift({
+        id: `notif-awd-${Date.now()}`,
+        targetStudentUsername: cleanUser,
+        type: "announcement",
+        title:
+          awardType === "certificate"
+            ? `🎓 New Official Certificate Awarded: ${title}`
+            : `🏅 New Teacher-Awarded Achievement: ${title} (+${pointsValue || 50} pts!)`,
+        message: `${description || "Congratulations on your awesome achievement!"} • Open 'Rewards & Badges' to view and celebrate!`,
+        createdAt: new Date().toISOString(),
+      });
+
+      await saveLmsData(lms);
+
+      return NextResponse.json({
+        success: true,
+        message:
+          awardType === "certificate"
+            ? `Official Certificate "${title}" awarded to ${studentName}!`
+            : `Achievement "${title}" (+${pointsValue || 50} pts) awarded to ${studentName}!`,
+        progress: prog,
+      });
+    }
+
+    // 10. MODULE F: UPDATE GLOBAL LEADERBOARD & PRIVACY SETTINGS
+    if (action === "update-leaderboard-settings") {
+      const { enabled = true, anonymizeNames = true, hideForEarlyYears = true } = body;
+      lms.leaderboardSettings = {
+        enabled: Boolean(enabled),
+        anonymizeNames: Boolean(anonymizeNames),
+        hideForEarlyYears: Boolean(hideForEarlyYears),
+      };
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message: "Leaderboard & privacy settings updated!",
+        leaderboardSettings: lms.leaderboardSettings,
       });
     }
 

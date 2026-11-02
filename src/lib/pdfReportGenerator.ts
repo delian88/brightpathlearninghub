@@ -1,4 +1,4 @@
-import type { StudentReportCard } from "./lmsData";
+import type { StudentReportCard, StudentCertificate } from "./lmsData";
 
 export function downloadReportCardPdf(
   report: StudentReportCard,
@@ -621,6 +621,233 @@ export function downloadReportCardPdf(
     const a = document.createElement("a");
     a.href = url;
     a.download = `BrightPath-ReportCard-${report.reportRef}-${report.studentName.replace(
+      /\s+/g,
+      "_"
+    )}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+}
+
+export function downloadCertificatePdf(cert: StudentCertificate) {
+  const origin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "https://brightpathlearninghub.vercel.app";
+
+  const issuedDate = new Date(cert.issuedAt || Date.now()).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
+  const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bright Path Achievement Certificate - ${cert.studentName}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Georgia', 'Times New Roman', serif;
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 24px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .toolbar {
+      max-width: 900px;
+      margin: 0 auto 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background: #071527;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 12px;
+    }
+    .btn-print {
+      background: #f59e0b;
+      color: #0f172a;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .cert-outer {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #fffbeb;
+      padding: 18px;
+      border: 6px solid #0a1931;
+      border-radius: 18px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.14);
+    }
+    .cert-inner {
+      background: #ffffff;
+      border: 3px double #d97706;
+      border-radius: 12px;
+      padding: 44px 48px;
+      text-align: center;
+      position: relative;
+    }
+    .logo {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      border: 3px solid #f59e0b;
+      padding: 4px;
+      background: #fff;
+      object-fit: contain;
+      margin-bottom: 12px;
+    }
+    .school-name {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #1e3a8a;
+      margin-bottom: 4px;
+    }
+    .cert-heading {
+      font-size: 36px;
+      font-weight: 800;
+      color: #071527;
+      margin: 8px 0;
+    }
+    .cert-sub {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: #b45309;
+      font-weight: 800;
+      margin-bottom: 22px;
+    }
+    .student-name {
+      font-size: 34px;
+      font-weight: 900;
+      color: #047857;
+      border-bottom: 2px solid #fbbf24;
+      display: inline-block;
+      padding: 0 28px 6px;
+      margin: 10px 0 18px;
+    }
+    .cert-title {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      font-size: 20px;
+      font-weight: 900;
+      color: #1e3a8a;
+      margin-bottom: 12px;
+    }
+    .citation {
+      font-size: 16px;
+      line-height: 1.65;
+      color: #334155;
+      max-width: 680px;
+      margin: 0 auto 32px;
+    }
+    .footer-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      font-size: 12px;
+      color: #475569;
+    }
+    .seal {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: #ffffff;
+      width: 82px;
+      height: 82px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      border: 3px dashed #fde68a;
+      margin: 0 auto;
+    }
+    @media print {
+      body { background: #ffffff; padding: 0; }
+      .toolbar { display: none !important; }
+      .cert-outer { box-shadow: none; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div>
+      <strong>Official Bright Path Certificate (${cert.certRef})</strong>
+      <span style="font-size: 12px; color: #cbd5e1; margin-left: 10px;">
+        Choose "Save as PDF" or print in Landscape/Portrait
+      </span>
+    </div>
+    <button class="btn-print" onclick="window.print()">🖨️ Print / Save Certificate as PDF</button>
+  </div>
+
+  <div class="cert-outer">
+    <div class="cert-inner">
+      <img src="${origin}/logo.png" alt="Bright Path Learning Hub Logo" class="logo" />
+      <div class="school-name">Bright Path Learning Hub • Govt. Reg. No. 9840276</div>
+      <h1 class="cert-heading">Certificate of Achievement</h1>
+      <div class="cert-sub">Proudly Presented To</div>
+      <div class="student-name">${cert.studentName}</div>
+      <div style="font-family: 'Segoe UI', sans-serif; font-size: 13px; font-weight: 700; color: #64748b; margin-bottom: 14px;">
+        Class / Program: ${cert.grade} • ${cert.courseName}
+      </div>
+      <div class="cert-title">🏆 ${cert.title}</div>
+      <p class="citation">${cert.citation}</p>
+
+      <div class="footer-row">
+        <div style="text-align: left;">
+          <div style="font-weight: 800; color: #0f172a; font-size: 13px;">Date Issued: ${issuedDate}</div>
+          <div style="color: #64748b; margin-top: 2px;">Certificate Ref: #${cert.certRef}</div>
+        </div>
+        <div class="seal">
+          <span>BRIGHT PATH</span>
+          <span style="font-size: 14px;">★</span>
+          <span>VERIFIED</span>
+        </div>
+        <div style="text-align: right;">
+          <div style="border-bottom: 2px solid #0a1931; padding-bottom: 4px; font-weight: 800; color: #0f172a; font-size: 13px;">
+            ${cert.issuedBy || "Bright Path Academic Director"}
+          </div>
+          <div style="color: #64748b; margin-top: 4px;">Authorized Educator & Academic Director</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    window.onload = function() {
+      setTimeout(function() { window.print(); }, 350);
+    };
+  </script>
+</body>
+</html>`;
+
+  const printWin = window.open("", "_blank", "width=960,height=780");
+  if (printWin) {
+    printWin.document.open();
+    printWin.document.write(htmlContent);
+    printWin.document.close();
+  } else {
+    const blob = new Blob([htmlContent], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `BrightPath-Certificate-${cert.certRef}-${cert.studentName.replace(
       /\s+/g,
       "_"
     )}.html`;

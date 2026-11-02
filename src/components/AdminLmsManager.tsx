@@ -26,7 +26,10 @@ import {
   createDefaultPeriodSummaries,
   analyzeStudentProgressAndAlerts,
 } from "@/lib/lmsData";
-import { downloadReportCardPdf } from "@/lib/pdfReportGenerator";
+import {
+  downloadReportCardPdf,
+  downloadCertificatePdf,
+} from "@/lib/pdfReportGenerator";
 import type { ToastType } from "./ToastNotification";
 
 interface AdminLmsManagerProps {
@@ -287,6 +290,25 @@ export default function AdminLmsManager({
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementMsg, setAnnouncementMsg] = useState("");
   const [sendingNotif, setSendingNotif] = useState(false);
+
+  // Module F: Teacher-Awarded Achievements, Certificates & Leaderboard Settings
+  const [awardType, setAwardType] = useState<"badge" | "certificate" | "points">("badge");
+  const [awardCategory, setAwardCategory] = useState<string>("teacher-award");
+  const [awardIcon, setAwardIcon] = useState<string>("🏅");
+  const [awardTitle, setAwardTitle] = useState<string>("");
+  const [awardDescription, setAwardDescription] = useState<string>("");
+  const [awardPoints, setAwardPoints] = useState<number>(50);
+  const [awardingAchievement, setAwardingAchievement] = useState<boolean>(false);
+  const [lbEnabled, setLbEnabled] = useState<boolean>(
+    lmsData.leaderboardSettings?.enabled ?? true
+  );
+  const [lbAnonymize, setLbAnonymize] = useState<boolean>(
+    lmsData.leaderboardSettings?.anonymizeNames ?? true
+  );
+  const [lbHideEarlyYears, setLbHideEarlyYears] = useState<boolean>(
+    lmsData.leaderboardSettings?.hideForEarlyYears ?? true
+  );
+  const [savingLbSettings, setSavingLbSettings] = useState<boolean>(false);
 
   // ==========================================================================
   // 4. REPORT CARD GENERATOR STATE (Populated dynamically per student)
@@ -873,6 +895,82 @@ export default function AdminLmsManager({
       showToast("Error sending announcement.", "error");
     } finally {
       setSendingNotif(false);
+    }
+  };
+
+  const handleAwardStudentAchievement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentUser) {
+      showToast("Please select a student first.", "warning");
+      return;
+    }
+    setAwardingAchievement(true);
+    try {
+      const stu = allRealStudents.find(
+        (s) => s.username.toUpperCase() === selectedStudentUser.toUpperCase()
+      );
+      const res = await fetch("/api/lms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "award-student-achievement",
+          studentUsername: selectedStudentUser,
+          studentName: stu?.studentName || selectedStudentUser,
+          grade: stu?.grade || "All Grades",
+          courseName: stu?.courseName || "English Phonics & Reading",
+          awardType,
+          category: awardCategory,
+          icon: awardIcon,
+          title:
+            awardTitle ||
+            (awardType === "certificate"
+              ? "Certificate of Academic Excellence"
+              : "Star Scholar Award"),
+          description:
+            awardDescription ||
+            "Awarded for outstanding effort, curiosity, and improvement in class!",
+          pointsValue: awardPoints,
+          awardedBy: "Bright Path Class Teacher",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, "success");
+        setAwardTitle("");
+        setAwardDescription("");
+        onRefresh();
+      } else {
+        showToast(data.message || "Could not award achievement.", "error");
+      }
+    } catch {
+      showToast("Error awarding student achievement.", "error");
+    } finally {
+      setAwardingAchievement(false);
+    }
+  };
+
+  const handleSaveLeaderboardSettings = async () => {
+    setSavingLbSettings(true);
+    try {
+      const res = await fetch("/api/lms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-leaderboard-settings",
+          enabled: lbEnabled,
+          anonymizeNames: lbAnonymize,
+          hideForEarlyYears: lbHideEarlyYears,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, "success");
+        onRefresh();
+      }
+    } catch {
+      showToast("Error saving leaderboard settings.", "error");
+    } finally {
+      setSavingLbSettings(false);
     }
   };
 
@@ -3373,6 +3471,233 @@ export default function AdminLmsManager({
               })}
             </div>
           )}
+        </div>
+
+        {/* Module F: Teacher-Awarded Achievements, Certificates & Leaderboard Privacy Controls */}
+        <div className="admin-panel-card" style={{ padding: 24 }}>
+          <div style={{ marginBottom: 16 }}>
+            <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#d97706", textTransform: "uppercase" }}>
+              Module F • Motivation, Rewards & Achievements
+            </span>
+            <h3 style={{ margin: "2px 0 4px", fontSize: "1.12rem", fontWeight: 900 }}>
+              🏆 Award Teacher Achievements, Certificates, Bonus Points & Leaderboard Privacy
+            </h3>
+            <p style={{ margin: 0, fontSize: "0.83rem", color: "#64748b" }}>
+              Award Reading, Mathematics, Attendance, or Teacher badges, bonus points, and printable certificates to the selected student ({selectedStudentUser || "Select student above"}), and configure privacy-controlled leaderboard settings.
+            </p>
+          </div>
+
+          <div className="form-row-2col" style={{ gap: 20 }}>
+            {/* Left: Award Achievement / Certificate Form */}
+            <form
+              onSubmit={handleAwardStudentAchievement}
+              style={{
+                background: "#fffbeb",
+                border: "1px solid #fde68a",
+                borderRadius: 16,
+                padding: 18,
+              }}
+            >
+              <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "#92400e", marginBottom: 12 }}>
+                🌟 Award Badge, Printable Certificate, or Bonus Points
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: "0.72rem", fontWeight: 800, color: "#78350f" }}>
+                    Award Type
+                  </label>
+                  <select
+                    className="form-select"
+                    value={awardType}
+                    onChange={(e) =>
+                      setAwardType(e.target.value as "badge" | "certificate" | "points")
+                    }
+                    style={{ background: "#fff", marginTop: 4 }}
+                  >
+                    <option value="badge">🏅 Achievement Badge + Points</option>
+                    <option value="certificate">🎓 Official Printable Certificate</option>
+                    <option value="points">⭐ Bonus Star Points Only</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.72rem", fontWeight: 800, color: "#78350f" }}>
+                    Badge / Award Category
+                  </label>
+                  <select
+                    className="form-select"
+                    value={awardCategory}
+                    onChange={(e) => setAwardCategory(e.target.value)}
+                    style={{ background: "#fff", marginTop: 4 }}
+                  >
+                    <option value="teacher-award">🌟 Teacher-Awarded Achievement</option>
+                    <option value="reading">📖 Reading & Phonics Badge</option>
+                    <option value="mathematics">🔢 Mathematics Badge</option>
+                    <option value="attendance">📅 Attendance Badge</option>
+                    <option value="homework">📝 Homework Excellence</option>
+                    <option value="streak">🔥 Weekly Learning Streak</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "90px 1fr 110px", gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: "0.72rem", fontWeight: 800, color: "#78350f" }}>
+                    Icon
+                  </label>
+                  <select
+                    className="form-select"
+                    value={awardIcon}
+                    onChange={(e) => setAwardIcon(e.target.value)}
+                    style={{ background: "#fff", marginTop: 4 }}
+                  >
+                    <option value="🏅">🏅</option>
+                    <option value="📖">📖</option>
+                    <option value="🔢">🔢</option>
+                    <option value="📅">📅</option>
+                    <option value="🔥">🔥</option>
+                    <option value="🎓">🎓</option>
+                    <option value="🌟">🌟</option>
+                    <option value="🚀">🚀</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.72rem", fontWeight: 800, color: "#78350f" }}>
+                    Achievement / Certificate Title
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Super Phonics Reader of the Week"
+                    value={awardTitle}
+                    onChange={(e) => setAwardTitle(e.target.value)}
+                    required={awardType !== "points"}
+                    style={{ background: "#fff", marginTop: 4 }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.72rem", fontWeight: 800, color: "#78350f" }}>
+                    Bonus Points
+                  </label>
+                  <input
+                    type="number"
+                    min={10}
+                    step={10}
+                    className="form-input"
+                    value={awardPoints}
+                    onChange={(e) => setAwardPoints(Number(e.target.value))}
+                    style={{ background: "#fff", marginTop: 4 }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: "0.72rem", fontWeight: 800, color: "#78350f" }}>
+                  Citation / Reason for Award
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. For reading 3 storybooks aloud with 95% pronunciation accuracy!"
+                  value={awardDescription}
+                  onChange={(e) => setAwardDescription(e.target.value)}
+                  style={{ background: "#fff", marginTop: 4 }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={awardingAchievement}
+                className="btn btn-primary"
+                style={{ padding: "10px 18px", fontSize: "0.82rem" }}
+              >
+                <span>
+                  {awardingAchievement
+                    ? "Awarding..."
+                    : awardType === "certificate"
+                    ? `🎓 Issue Official Certificate to ${selectedStudentUser || "Student"}`
+                    : `🏅 Award Achievement (+${awardPoints} pts) to ${selectedStudentUser || "Student"}`}
+                </span>
+              </button>
+            </form>
+
+            {/* Right: Privacy-Controlled Leaderboard & Early-Years Focus Settings */}
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #cbd5e1",
+                borderRadius: 16,
+                padding: 18,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                gap: 14,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "#0f172a", marginBottom: 6 }}>
+                  🛡️ Student Leaderboard & Early-Years Privacy Controls
+                </div>
+                <p style={{ fontSize: "0.8rem", color: "#475569", margin: "0 0 14px", lineHeight: 1.5 }}>
+                  Control whether the optional student leaderboard is shown, anonymize student names for privacy, and automatically focus early-years students (KG – Grade 1) on individual improvement rather than peer competition.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: "0.84rem", fontWeight: 700, color: "#1e293b" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={lbEnabled}
+                      onChange={(e) => setLbEnabled(e.target.checked)}
+                      style={{ width: 17, height: 17 }}
+                    />
+                    Enable Optional Student Leaderboard in Portal
+                  </label>
+
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={lbAnonymize}
+                      onChange={(e) => setLbAnonymize(e.target.checked)}
+                      style={{ width: 17, height: 17 }}
+                    />
+                    Privacy Protection: Mask Student Last Names with Initials (e.g. Zainab B.)
+                  </label>
+
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", color: "#047857" }}>
+                    <input
+                      type="checkbox"
+                      checked={lbHideEarlyYears}
+                      onChange={(e) => setLbHideEarlyYears(e.target.checked)}
+                      style={{ width: 17, height: 17 }}
+                    />
+                    🌱 Early-Years Rule: Focus Early-Years Learners on Personal Growth Instead of Competition
+                  </label>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={savingLbSettings}
+                onClick={handleSaveLeaderboardSettings}
+                style={{
+                  alignSelf: "flex-start",
+                  background: "#0f172a",
+                  color: "#ffffff",
+                  border: "none",
+                  padding: "10px 18px",
+                  borderRadius: 10,
+                  fontSize: "0.8rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                {savingLbSettings ? "Saving Settings..." : "Save Leaderboard & Early-Years Privacy Rules"}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Broadcast or Targeted Notification to Students & Parents */}

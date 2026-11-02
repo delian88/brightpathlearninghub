@@ -149,6 +149,15 @@ export interface HomeworkSubmission {
   returnedAt?: string;
 }
 
+export type BadgeCategory =
+  | "reading"
+  | "mathematics"
+  | "attendance"
+  | "homework"
+  | "streak"
+  | "teacher-award"
+  | "general";
+
 export interface StudentBadge {
   id: string;
   title: string;
@@ -156,6 +165,23 @@ export interface StudentBadge {
   icon: string;
   earnedAt: string;
   color: string;
+  category?: BadgeCategory;
+  awardedBy?: string;
+  pointsValue?: number;
+}
+
+export interface StudentCertificate {
+  id: string;
+  certRef: string;
+  studentUsername: string;
+  studentName: string;
+  grade: string;
+  courseName: string;
+  title: string;
+  citation: string;
+  category: BadgeCategory;
+  issuedBy: string;
+  issuedAt: string;
 }
 
 export interface DailyLearningActivity {
@@ -341,7 +367,20 @@ export interface StudentProgressRecord {
   improvementRecommendations?: string[];
   flaggedForAttention?: boolean;
   flagReason?: string;
+  // Module F: Rewards, Streaks, Certificates & Privacy-Controlled Leaderboard
+  bonusPoints?: number;
+  streakDays?: number;
+  activeDaysOfWeek?: string[];
+  certificates?: StudentCertificate[];
+  leaderboardPrivacy?: "public" | "initials" | "private";
+  earlyYearsFocusMode?: boolean;
   updatedAt: string;
+}
+
+export interface LeaderboardGlobalSettings {
+  enabled: boolean;
+  anonymizeNames: boolean;
+  hideForEarlyYears: boolean;
 }
 
 export interface LmsStateData {
@@ -351,6 +390,7 @@ export interface LmsStateData {
   notifications: PortalNotification[];
   progressRecords: Record<string, StudentProgressRecord>;
   aiLogs: AiPracticeLog[];
+  leaderboardSettings?: LeaderboardGlobalSettings;
 }
 
 export const QUESTION_TYPE_LABELS: Record<
@@ -1071,5 +1111,333 @@ export function analyzeStudentProgressAndAlerts(
     recommendations,
     isStruggling: strugglingReasons.length > 0,
     strugglingReasons,
+  };
+}
+
+// ============================================================================
+// MODULE F: REWARDS, BADGES, WEEKLY STREAKS, CERTIFICATES & LEADERBOARD ENGINE
+// ============================================================================
+
+export function isEarlyYearsStudent(grade?: string, manualEarlyYears?: boolean): boolean {
+  if (typeof manualEarlyYears === "boolean") return manualEarlyYears;
+  const g = (grade || "").toLowerCase();
+  return (
+    g.includes("kg") ||
+    g.includes("kindergarten") ||
+    g.includes("nursery") ||
+    g.includes("reception") ||
+    g.includes("pre-k") ||
+    g.includes("early") ||
+    g.includes("grade 1") ||
+    g.includes("year 1") ||
+    g.includes("age 4") ||
+    g.includes("age 5") ||
+    g.includes("age 6")
+  );
+}
+
+export interface EvaluatedBadgeItem extends StudentBadge {
+  unlocked: boolean;
+  progressPercent: number;
+  requirementText: string;
+}
+
+export function computeStudentRewardsAndAchievements(
+  prog: StudentProgressRecord | null | undefined,
+  submissions: HomeworkSubmission[],
+  aiLogs: AiPracticeLog[],
+  studentName = "Bright Scholar",
+  studentUsername = "BP-SCHOLAR",
+  grade = "All Grades",
+  courseName = "English Phonics & Reading"
+) {
+  // 1. Points Calculation
+  // - 50 pts for each submitted homework + 25 pts for >=80% + 25 pts for 100%
+  // - 30 pts for each Bright Buddy AI session
+  // - 20 pts for each completed 1:1 live lesson
+  // - Teacher-awarded bonus points
+  const homeworkBasePoints = submissions.length * 50;
+  const homeworkExcellenceBonus = submissions.reduce((acc, s) => {
+    const pct = s.percentage || 0;
+    if (pct >= 95) return acc + 50;
+    if (pct >= 80) return acc + 25;
+    return acc;
+  }, 0);
+  const homeworkPoints = homeworkBasePoints + homeworkExcellenceBonus;
+
+  const aiPracticePoints = aiLogs.length * 30;
+  const attendanceLessonPoints =
+    (prog?.lessonsCompleted || 0) * 20 +
+    ((prog?.attendanceRate ?? 100) >= 95 ? 100 : 0);
+  const teacherBonusPoints = prog?.bonusPoints || 0;
+
+  const customBadgePoints = (prog?.badges || []).reduce(
+    (acc, b) => acc + (b.pointsValue || 0),
+    0
+  );
+
+  const totalPoints =
+    homeworkPoints +
+    aiPracticePoints +
+    attendanceLessonPoints +
+    teacherBonusPoints +
+    customBadgePoints;
+
+  // Star Level Progression
+  const starLevel =
+    totalPoints >= 1000
+      ? { level: 5, title: "Bright Path Grand Master 🌟", nextAt: 1500 }
+      : totalPoints >= 600
+      ? { level: 4, title: "Super Scholar Champion 🏆", nextAt: 1000 }
+      : totalPoints >= 350
+      ? { level: 3, title: "Confident Explorer 🚀", nextAt: 600 }
+      : totalPoints >= 150
+      ? { level: 2, title: "Rising Star Reader ⭐", nextAt: 350 }
+      : { level: 1, title: "Curious Young Learner 🌱", nextAt: 150 };
+
+  // 2. Weekly Learning Streak Calculation (Mon - Sun)
+  const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const detectedDays = new Set<string>(prog?.activeDaysOfWeek || []);
+
+  // Always mark days from recent submissions and AI logs within the last 7 days
+  const now = Date.now();
+  const sevenDaysMs = 7 * 86400000;
+  submissions.forEach((s) => {
+    const t = new Date(s.submittedAt).getTime();
+    if (now - t <= sevenDaysMs) {
+      const jsDay = new Date(s.submittedAt).getDay(); // 0=Sun..6=Sat
+      const label = jsDay === 0 ? "Sun" : dayNames[jsDay - 1];
+      detectedDays.add(label);
+    }
+  });
+  aiLogs.forEach((l) => {
+    const t = new Date(l.createdAt).getTime();
+    if (now - t <= sevenDaysMs) {
+      const jsDay = new Date(l.createdAt).getDay();
+      const label = jsDay === 0 ? "Sun" : dayNames[jsDay - 1];
+      detectedDays.add(label);
+    }
+  });
+
+  // Ensure today is marked if student has completed daily activities
+  if ((prog?.completedActivityIds || []).length > 0 || detectedDays.size === 0) {
+    const todayJs = new Date().getDay();
+    const todayLabel = todayJs === 0 ? "Sun" : dayNames[todayJs - 1];
+    detectedDays.add(todayLabel);
+  }
+
+  const activeDaysOfWeek = dayNames.filter((d) => detectedDays.has(d));
+  const streakDays =
+    prog?.streakDays !== undefined && prog.streakDays > 0
+      ? prog.streakDays
+      : Math.max(activeDaysOfWeek.length, (prog?.completedActivityIds || []).length > 0 ? 3 : 1);
+
+  // 3. Reading, Math, Attendance, Homework, Streak & Teacher Badges
+  const readingLogs = aiLogs.filter(
+    (l) => l.mode === "reading" || l.mode === "pronunciation" || l.mode === "speaking"
+  );
+  const mathLogs = aiLogs.filter((l) => l.mode === "math");
+  const mathSubs = submissions.filter(
+    (s) =>
+      (s.subject || s.courseName || "").toLowerCase().includes("math") ||
+      (s.homeworkTitle || "").toLowerCase().includes("math")
+  );
+  const readingProgressVal = prog?.readingProgress || 0;
+  const attendanceVal = prog?.attendanceRate ?? 100;
+  const lessonsDone = prog?.lessonsCompleted || 0;
+
+  const builtInCatalog: EvaluatedBadgeItem[] = [
+    // READING BADGES
+    {
+      id: "badge-reading-explorer",
+      title: "Phonics & Reading Explorer",
+      description: "Practised phonics sounds and story reading aloud with Bright Buddy!",
+      icon: "📖",
+      color: "#0284c7",
+      category: "reading",
+      earnedAt: new Date().toISOString(),
+      unlocked: readingLogs.length >= 1 || readingProgressVal >= 40,
+      progressPercent: Math.min(100, Math.max(readingLogs.length * 100, readingProgressVal * 2)),
+      requirementText: "Complete 1 reading session or reach 40% reading progress",
+    },
+    {
+      id: "badge-reading-pronunciation",
+      title: "Word Pronunciation Star",
+      description: "Mastered tricky multi-syllable words and clear articulation!",
+      icon: "🗣️",
+      color: "#0ea5e9",
+      category: "reading",
+      earnedAt: new Date().toISOString(),
+      unlocked: readingLogs.length >= 2 || readingProgressVal >= 75,
+      progressPercent: Math.min(100, Math.round((readingProgressVal / 75) * 100)),
+      requirementText: "Reach 75%+ in Phonics & Pronunciation accuracy",
+    },
+    {
+      id: "badge-reading-champion",
+      title: "Storybook Fluency Champion",
+      description: "Achieved 85%+ reading fluency and comprehension mastery!",
+      icon: "📚",
+      color: "#0369a1",
+      category: "reading",
+      earnedAt: new Date().toISOString(),
+      unlocked: readingProgressVal >= 85,
+      progressPercent: Math.min(100, Math.round((readingProgressVal / 85) * 100)),
+      requirementText: "Achieve 85%+ Reading Fluency Mastery",
+    },
+
+    // MATHEMATICS BADGES
+    {
+      id: "badge-math-ninja",
+      title: "Number & Counting Ninja",
+      description: "Completed interactive number, counting, and mental math drills!",
+      icon: "🔢",
+      color: "#d97706",
+      category: "mathematics",
+      earnedAt: new Date().toISOString(),
+      unlocked: mathLogs.length >= 1 || mathSubs.length >= 1 || lessonsDone >= 2,
+      progressPercent:
+        mathLogs.length >= 1 || mathSubs.length >= 1
+          ? 100
+          : Math.min(100, lessonsDone * 50),
+      requirementText: "Complete 1 Mathematics session or assignment",
+    },
+    {
+      id: "badge-math-solver",
+      title: "Problem-Solving Wizard",
+      description: "Demonstrated strong logical thinking in addition, subtraction, and word problems!",
+      icon: "🧮",
+      color: "#f59e0b",
+      category: "mathematics",
+      earnedAt: new Date().toISOString(),
+      unlocked:
+        mathLogs.some((l) => l.score >= 80) ||
+        mathSubs.some((s) => s.percentage >= 80) ||
+        submissions.some((s) => s.percentage >= 85),
+      progressPercent: submissions.length > 0 ? 100 : 60,
+      requirementText: "Score 80%+ in a Mathematics or problem-solving challenge",
+    },
+
+    // ATTENDANCE BADGES
+    {
+      id: "badge-attendance-star",
+      title: "100% Punctuality & Attendance Star",
+      description: "Consistent, punctual attendance in 1-on-1 live interactive classes!",
+      icon: "📅",
+      color: "#10b981",
+      category: "attendance",
+      earnedAt: new Date().toISOString(),
+      unlocked: attendanceVal >= 90,
+      progressPercent: Math.min(100, Math.round((attendanceVal / 90) * 100)),
+      requirementText: "Maintain 90%+ class attendance rate",
+    },
+    {
+      id: "badge-attendance-dedicated",
+      title: "Dedicated Live Class Scholar",
+      description: "Actively participated in 1-on-1 live tutoring sessions!",
+      icon: "🎓",
+      color: "#059669",
+      category: "attendance",
+      earnedAt: new Date().toISOString(),
+      unlocked: lessonsDone >= 5,
+      progressPercent: Math.min(100, Math.round((lessonsDone / 5) * 100)),
+      requirementText: "Complete 5+ live 1-on-1 lessons",
+    },
+
+    // HOMEWORK & WEEKLY STREAK BADGES
+    {
+      id: "badge-homework-hero",
+      title: "Homework Completion Hero (+50 Pts)",
+      description: "Earned points for completing and submitting online homework assignments!",
+      icon: "📝",
+      color: "#7c3aed",
+      category: "homework",
+      earnedAt: new Date().toISOString(),
+      unlocked: submissions.length >= 1,
+      progressPercent: submissions.length >= 1 ? 100 : 30,
+      requirementText: "Submit at least 1 online homework assignment",
+    },
+    {
+      id: "badge-streak-flame",
+      title: "Weekly Learning Streak Flame",
+      description: "Practised consistently across the week to keep the learning flame burning!",
+      icon: "🔥",
+      color: "#ef4444",
+      category: "streak",
+      earnedAt: new Date().toISOString(),
+      unlocked: streakDays >= 3,
+      progressPercent: Math.min(100, Math.round((streakDays / 3) * 100)),
+      requirementText: "Reach a 3-day weekly learning streak",
+    },
+  ];
+
+  // Merge custom / Teacher-Awarded badges from progress.badges
+  const teacherBadges: EvaluatedBadgeItem[] = (prog?.badges || []).map((b) => ({
+    ...b,
+    category: b.category || "teacher-award",
+    awardedBy: b.awardedBy || "Bright Path Teacher",
+    unlocked: true,
+    progressPercent: 100,
+    requirementText: b.awardedBy ? `Awarded by ${b.awardedBy}` : "Teacher-Awarded Achievement",
+  }));
+
+  const allBadges: EvaluatedBadgeItem[] = [...teacherBadges];
+  for (const item of builtInCatalog) {
+    if (!allBadges.some((existing) => existing.title === item.title)) {
+      allBadges.push(item);
+    }
+  }
+
+  const unlockedBadges = allBadges.filter((b) => b.unlocked);
+
+  // 4. Official Printable Certificates (Teacher-Awarded + Milestone Certificates)
+  const certificates: StudentCertificate[] = [...(prog?.certificates || [])];
+
+  if (readingProgressVal >= 75 && !certificates.some((c) => c.category === "reading")) {
+    certificates.push({
+      id: `cert-reading-${studentUsername}`,
+      certRef: `BPCERT-RD-${studentUsername.slice(-4)}`,
+      studentUsername,
+      studentName,
+      grade,
+      courseName,
+      title: "Certificate of Reading & Phonics Excellence",
+      citation: `Awarded to ${studentName} for outstanding progress in phonemic decoding, word pronunciation, and reading aloud fluency at Bright Path Learning Hub.`,
+      category: "reading",
+      issuedBy: "Bright Path Academic Director",
+      issuedAt: new Date().toISOString(),
+    });
+  }
+
+  if (attendanceVal >= 90 && !certificates.some((c) => c.category === "attendance")) {
+    certificates.push({
+      id: `cert-att-${studentUsername}`,
+      certRef: `BPCERT-AT-${studentUsername.slice(-4)}`,
+      studentUsername,
+      studentName,
+      grade,
+      courseName,
+      title: "Certificate of Dedication & Exemplary Attendance",
+      citation: `Presented to ${studentName} in recognition of ${attendanceVal}% attendance, enthusiasm, and active participation in 1-on-1 live classes.`,
+      category: "attendance",
+      issuedBy: "Bright Path Class Educator",
+      issuedAt: new Date().toISOString(),
+    });
+  }
+
+  const earlyYears = isEarlyYearsStudent(grade, prog?.earlyYearsFocusMode);
+
+  return {
+    totalPoints,
+    homeworkPoints,
+    aiPracticePoints,
+    attendanceLessonPoints,
+    teacherBonusPoints,
+    starLevel,
+    streakDays,
+    activeDaysOfWeek,
+    allBadges,
+    unlockedBadges,
+    certificates,
+    earlyYears,
   };
 }
