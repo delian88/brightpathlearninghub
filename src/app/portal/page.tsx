@@ -106,6 +106,7 @@ export default function StudentPortalPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [studentAccount, setStudentAccount] = useState<any | null>(null);
+  const [authHydrated, setAuthHydrated] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   // Navigation & Portal Mode
@@ -179,12 +180,18 @@ export default function StudentPortalPage() {
   };
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("bp_student_account");
+    const saved =
+      localStorage.getItem("bp_student_account") ||
+      sessionStorage.getItem("bp_student_account");
     if (saved) {
       try {
-        setStudentAccount(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        localStorage.setItem("bp_student_account", saved);
+        sessionStorage.setItem("bp_student_account", saved);
+        setStudentAccount(parsed);
       } catch {}
     }
+    setAuthHydrated(true);
   }, []);
 
   const fetchStudentLmsData = async (acc: any) => {
@@ -231,8 +238,10 @@ export default function StudentPortalPage() {
       });
       const data = await res.json();
       if (data.success && data.account) {
+        const serialized = JSON.stringify(data.account);
         setStudentAccount(data.account);
-        sessionStorage.setItem("bp_student_account", JSON.stringify(data.account));
+        localStorage.setItem("bp_student_account", serialized);
+        sessionStorage.setItem("bp_student_account", serialized);
         showToast(`Welcome back, ${data.account.studentName}!`, "success");
       } else {
         const errMsg = data.message || "Invalid username or password.";
@@ -261,8 +270,10 @@ export default function StudentPortalPage() {
       scheduleSlot: "Weekday Evening (5 PM - 6 PM)",
       status: "active",
     };
+    const serialized = JSON.stringify(demoAcc);
     setStudentAccount(demoAcc);
-    sessionStorage.setItem("bp_student_account", JSON.stringify(demoAcc));
+    localStorage.setItem("bp_student_account", serialized);
+    sessionStorage.setItem("bp_student_account", serialized);
     showToast("Signed in to Demo Student & Parent Learning Hub!", "success");
   };
 
@@ -270,6 +281,7 @@ export default function StudentPortalPage() {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
+    localStorage.removeItem("bp_student_account");
     sessionStorage.removeItem("bp_student_account");
     setStudentAccount(null);
     setUsername("");
@@ -707,6 +719,10 @@ export default function StudentPortalPage() {
   // ============================================================================
   // UNAUTHENTICATED LOGIN VIEW
   // ============================================================================
+  if (!authHydrated) {
+    return <div style={{ minHeight: "100vh", background: "#f8fafc" }} />;
+  }
+
   if (!studentAccount) {
     return (
       <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "var(--font-sans)" }}>

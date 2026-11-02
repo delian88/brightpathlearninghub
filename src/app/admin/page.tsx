@@ -117,6 +117,7 @@ function AdminDashboardInner() {
 
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authHydrated, setAuthHydrated] = useState(false);
   const [authStep, setAuthStep] = useState<"credentials" | "otp">("credentials");
   const [loginEmail, setLoginEmail] = useState("brightpathlearninghub6@gmail.com");
   const [loginPassword, setLoginPassword] = useState("");
@@ -198,18 +199,28 @@ function AdminDashboardInner() {
   };
 
   useEffect(() => {
+    // Immediately restore persistent admin session until explicit Sign Out
+    const savedAuth =
+      localStorage.getItem("bp_admin_auth") === "true" ||
+      sessionStorage.getItem("bp_admin_auth") === "true";
+
+    if (savedAuth) {
+      localStorage.setItem("bp_admin_auth", "true");
+      sessionStorage.setItem("bp_admin_auth", "true");
+      setIsAuthenticated(true);
+    }
+    setAuthHydrated(true);
+
     const checkDeviceAndSession = async () => {
       const localToken = localStorage.getItem("bp_admin_trusted_device_token") || "";
       const localUntil = Number(localStorage.getItem("bp_admin_trusted_until") || "0");
 
-      // If 7 days have passed, clear stored trusted device token and force a new OTP
+      // If 7 days have passed, clear stored trusted device token so next login requires OTP
       if (localUntil && Date.now() >= localUntil) {
         localStorage.removeItem("bp_admin_trusted_device_token");
         localStorage.removeItem("bp_admin_trusted_until");
-        sessionStorage.removeItem("bp_admin_auth");
         setIsDeviceTrusted(false);
         setTrustedDaysRemaining(0);
-        setIsAuthenticated(false);
         return;
       }
 
@@ -230,11 +241,6 @@ function AdminDashboardInner() {
         }
       } catch {
         // Ignore network check error
-      }
-
-      const savedAuth = sessionStorage.getItem("bp_admin_auth");
-      if (savedAuth === "true") {
-        setIsAuthenticated(true);
       }
     };
 
@@ -314,6 +320,7 @@ function AdminDashboardInner() {
         setOtpSuccessMsg(msg);
         showToast(msg, "info");
       } else if (data.success && data.verified) {
+        localStorage.setItem("bp_admin_auth", "true");
         sessionStorage.setItem("bp_admin_auth", "true");
         if (data.trustedDevice) {
           setIsDeviceTrusted(true);
@@ -356,6 +363,7 @@ function AdminDashboardInner() {
       });
       const data = await res.json();
       if (data.success && data.verified) {
+        localStorage.setItem("bp_admin_auth", "true");
         sessionStorage.setItem("bp_admin_auth", "true");
         if (data.trustedDevice && data.trustedDeviceToken && data.trustedUntil) {
           localStorage.setItem("bp_admin_trusted_device_token", data.trustedDeviceToken);
@@ -447,6 +455,7 @@ function AdminDashboardInner() {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("bp_admin_auth");
     sessionStorage.removeItem("bp_admin_auth");
     setIsAuthenticated(false);
     setAuthStep("credentials");
@@ -692,6 +701,10 @@ function AdminDashboardInner() {
   // ============================================================================
   // LOGIN SCREEN (UNAUTHENTICATED)
   // ============================================================================
+  if (!authHydrated) {
+    return <div style={{ minHeight: "100vh", background: "#f8fafc" }} />;
+  }
+
   if (!isAuthenticated) {
     return (
       <div

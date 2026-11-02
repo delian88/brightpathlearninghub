@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Phone, MessageCircle, Calendar, Menu, X, Mail, UserCheck } from "lucide-react";
+import { Phone, MessageCircle, Calendar, Menu, X, Mail, UserCheck, LayoutDashboard } from "lucide-react";
 import { useSiteContent } from "@/context/SiteContentContext";
 
 interface NavbarProps {
@@ -12,8 +12,28 @@ interface NavbarProps {
 
 export default function Navbar({ onOpenBooking }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeStudentName, setActiveStudentName] = useState<string | null>(null);
+  const [isAdminActive, setIsAdminActive] = useState(false);
   const { content } = useSiteContent();
   const { general } = content;
+
+  useEffect(() => {
+    try {
+      const savedStudent =
+        localStorage.getItem("bp_student_account") ||
+        sessionStorage.getItem("bp_student_account");
+      if (savedStudent) {
+        const parsed = JSON.parse(savedStudent);
+        if (parsed?.studentName) {
+          setActiveStudentName(parsed.studentName.split(" ")[0]);
+        }
+      }
+      const savedAdmin =
+        localStorage.getItem("bp_admin_auth") === "true" ||
+        sessionStorage.getItem("bp_admin_auth") === "true";
+      setIsAdminActive(savedAdmin);
+    } catch {}
+  }, []);
 
   return (
     <header className="site-header">
@@ -47,14 +67,28 @@ export default function Navbar({ onOpenBooking }: NavbarProps) {
 
           {/* Right Action CTAs */}
           <div className="header-actions">
-            {/* Student Portal Login */}
+            {isAdminActive && (
+              <Link
+                href="/admin"
+                className="btn btn-navy header-btn-login"
+                style={{ background: "#0f172a", border: "1px solid #f59e0b" }}
+                title="Return to Active Admin Dashboard"
+              >
+                <LayoutDashboard size={15} color="#fbbf24" />
+                <span className="header-action-label">Admin Panel</span>
+              </Link>
+            )}
+
+            {/* Student Portal Login / Active Dashboard */}
             <Link
               href="/portal"
               className="btn btn-navy header-btn-login"
-              title="Student & Parent Portal Login"
+              title={activeStudentName ? `Return to ${activeStudentName}'s Dashboard` : "Student & Parent Portal Login"}
             >
               <UserCheck size={16} />
-              <span className="header-action-label">Student Login</span>
+              <span className="header-action-label">
+                {activeStudentName ? `${activeStudentName}'s Portal` : "Student Login"}
+              </span>
             </Link>
 
             {/* WhatsApp Connect */}
@@ -124,8 +158,18 @@ export default function Navbar({ onOpenBooking }: NavbarProps) {
               style={{ color: "var(--bp-navy-800)", fontWeight: 700 }}
               onClick={() => setMobileMenuOpen(false)}
             >
-              🔐 Student Portal Login
+              🔐 {activeStudentName ? `Return to ${activeStudentName}'s Portal` : "Student Portal Login"}
             </Link>
+            {isAdminActive && (
+              <Link
+                href="/admin"
+                className="nav-link"
+                style={{ color: "#d97706", fontWeight: 800 }}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                ⚡ Return to Admin Dashboard
+              </Link>
+            )}
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, paddingTop: 10, borderTop: "1px solid var(--border-light)" }}>
               <a
                 href={`tel:${general.phone}`}
