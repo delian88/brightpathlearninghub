@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
@@ -111,7 +111,7 @@ const SLUG_TO_VIEW: Record<string, ActiveView> = {
   "cms-curriculum": "cms-curriculum",
 };
 
-export default function AdminDashboardPage() {
+function AdminDashboardInner() {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -3393,5 +3393,13 @@ export default function AdminDashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminDashboardPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#f8fafc" }} />}>
+      <AdminDashboardInner />
+    </Suspense>
   );
 }
