@@ -2325,37 +2325,153 @@ export default function AdminLmsManager({
           )}
         </div>
 
-        {/* AI Learning Buddy Practice Logs */}
+        {/* Complete Bright Buddy AI Learning Assessment History */}
         <div className="admin-panel-card" style={{ padding: 24 }}>
-          <h3 style={{ margin: "0 0 12px", fontSize: "1.05rem", fontWeight: 800 }}>
-            🤖 AI Learning Buddy Sessions ({lmsData.aiLogs.length})
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: "1.08rem", fontWeight: 900 }}>
+                🤖 Bright Buddy — Complete AI Learning Assessment History ({lmsData.aiLogs.length})
+              </h3>
+              <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "#64748b" }}>
+                Tracks every child’s skills practised, questions attempted, correct/incorrect answers, words pronounced correctly, words needing improvement, time spent learning, mastery level, and recommended next activity.
+              </p>
+            </div>
+            {selectedStudentUser && (
+              <span
+                style={{
+                  background: "#eef2ff",
+                  color: "#4338ca",
+                  padding: "4px 12px",
+                  borderRadius: 999,
+                  fontSize: "0.76rem",
+                  fontWeight: 800,
+                }}
+              >
+                Showing All Sessions (Highlighting {selectedStudentUser})
+              </span>
+            )}
+          </div>
+
           {lmsData.aiLogs.length === 0 ? (
             <p style={{ fontSize: "0.85rem", color: "#64748b", margin: 0 }}>
-              No AI practice sessions recorded yet. When students read aloud, practise pronunciation, or submit writing in the AI Learning Buddy, their scores and improvement areas appear here.
+              No Bright Buddy AI learning sessions recorded yet. When students practise Reading, Writing, Speaking (SuperSpeakers), or Mathematics with Bright Buddy, their complete assessment logs appear here.
             </p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {lmsData.aiLogs.map((log) => (
-                <div
-                  key={log.id}
-                  style={{
-                    padding: 14,
-                    borderRadius: 12,
-                    border: "1px solid #e2e8f0",
-                    background: "#f8fafc",
-                    fontSize: "0.84rem",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800 }}>
-                    <span>
-                      {log.studentName} ({log.studentUsername}) — {log.topic}
-                    </span>
-                    <span style={{ color: "#059669" }}>Score: {log.score}%</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {lmsData.aiLogs.map((log) => {
+                const isSelectedStudent =
+                  selectedStudentUser &&
+                  log.studentUsername.toUpperCase() === selectedStudentUser.toUpperCase();
+                return (
+                  <div
+                    key={log.id}
+                    style={{
+                      padding: 16,
+                      borderRadius: 14,
+                      border: isSelectedStudent ? "2px solid #4f46e5" : "1px solid #cbd5e1",
+                      background: isSelectedStudent ? "#eef2ff" : "#f8fafc",
+                      fontSize: "0.84rem",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                      <div style={{ fontWeight: 900, fontSize: "0.94rem", color: "#0f172a" }}>
+                        👤 {log.studentName} ({log.studentUsername}) — {log.topic}
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <span
+                          style={{
+                            background: "#dcfce7",
+                            color: "#15803d",
+                            padding: "3px 10px",
+                            borderRadius: 999,
+                            fontSize: "0.74rem",
+                            fontWeight: 800,
+                          }}
+                        >
+                          Mastery: {log.masteryLevel || "Proficient"} ({log.score}%)
+                        </span>
+                        <span
+                          style={{
+                            background: "#e0f2fe",
+                            color: "#0369a1",
+                            padding: "3px 10px",
+                            borderRadius: 999,
+                            fontSize: "0.74rem",
+                            fontWeight: 800,
+                          }}
+                        >
+                          ⏱️ Time Spent: {log.timeSpentMinutes || 5} min
+                        </span>
+                        <span style={{ color: "#64748b", fontSize: "0.74rem", fontWeight: 700 }}>
+                          {new Date(log.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                        gap: 8,
+                        background: "#ffffff",
+                        padding: 12,
+                        borderRadius: 10,
+                        border: "1px solid #e2e8f0",
+                        marginBottom: 8,
+                      }}
+                    >
+                      <div>
+                        <strong style={{ color: "#475569", fontSize: "0.74rem" }}>Skills Practised:</strong>
+                        <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                          {log.skillsPractised && log.skillsPractised.length > 0
+                            ? log.skillsPractised.join(", ")
+                            : log.mode.toUpperCase()}
+                        </div>
+                      </div>
+                      <div>
+                        <strong style={{ color: "#475569", fontSize: "0.74rem" }}>Questions & Answers:</strong>
+                        <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                          Attempted: {log.questionsAttempted ?? 0} •{" "}
+                          <span style={{ color: "#059669" }}>Correct: {log.correctAnswers ?? 0}</span> •{" "}
+                          <span style={{ color: "#dc2626" }}>Incorrect: {log.incorrectAnswers ?? 0}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <strong style={{ color: "#475569", fontSize: "0.74rem" }}>Words Pronounced Correctly:</strong>
+                        <div style={{ fontWeight: 700, color: "#059669" }}>
+                          {log.wordsPronouncedCorrectly && log.wordsPronouncedCorrectly.length > 0
+                            ? log.wordsPronouncedCorrectly.join(", ")
+                            : "—"}
+                        </div>
+                      </div>
+                      <div>
+                        <strong style={{ color: "#475569", fontSize: "0.74rem" }}>Words Needing Improvement:</strong>
+                        <div style={{ fontWeight: 700, color: "#d97706" }}>
+                          {log.wordsNeedingImprovement && log.wordsNeedingImprovement.length > 0
+                            ? log.wordsNeedingImprovement.join(", ")
+                            : "None"}
+                          {log.wordsImprovedOnRetry && log.wordsImprovedOnRetry.length > 0 && (
+                            <span style={{ color: "#059669", marginLeft: 6 }}>
+                              (✓ Improved on retry: {log.wordsImprovedOnRetry.join(", ")})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, fontSize: "0.8rem" }}>
+                      <div style={{ color: "#334155" }}>
+                        <strong>Assessment Summary:</strong> {log.feedback}
+                      </div>
+                      {log.recommendedNextActivity && (
+                        <div style={{ color: "#047857", fontWeight: 800 }}>
+                          👉 Recommended Next Activity: {log.recommendedNextActivity}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ color: "#475569", marginTop: 4 }}>{log.feedback}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -689,7 +689,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 5. STUDENT: Log AI Learning Buddy Practice (Reading, Pronunciation, Writing)
+    // 5. STUDENT: Log Bright Buddy AI Learning Session & Assessment (Reading, Writing, Speaking, Math)
     if (action === "log-ai-practice") {
       const {
         studentUsername,
@@ -699,37 +699,97 @@ export async function POST(request: Request) {
         score = 90,
         feedback,
         improvementArea,
+        skillsPractised = [],
+        questionsAttempted = 0,
+        correctAnswers = 0,
+        incorrectAnswers = 0,
+        wordsPronouncedCorrectly = [],
+        wordsNeedingImprovement = [],
+        wordsImprovedOnRetry = [],
+        readingSpeedWpm,
+        readingAccuracy,
+        timeSpentMinutes = 5,
+        masteryLevel,
+        recommendedNextActivity,
       } = body;
 
       const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
+      const numScore = Number(score);
+      const computedMastery =
+        masteryLevel ||
+        (numScore >= 90
+          ? "Mastered"
+          : numScore >= 75
+          ? "Proficient"
+          : numScore >= 60
+          ? "Developing"
+          : "Emerging");
+
       const newLog: AiPracticeLog = {
         id: `ai-${Date.now()}`,
         studentUsername: cleanUser,
         studentName: String(studentName || "Bright Scholar"),
         mode,
-        topic: String(topic || "AI Learning Buddy Session"),
-        score: Number(score),
-        feedback: String(feedback || "Great effort practising with AI Learning Buddy!"),
+        topic: String(topic || "Bright Buddy AI Learning Session"),
+        score: numScore,
+        feedback: String(feedback || "Great effort practising with Bright Buddy!"),
         improvementArea: improvementArea ? String(improvementArea) : undefined,
+        skillsPractised: Array.isArray(skillsPractised) ? skillsPractised.map(String) : [],
+        questionsAttempted: Number(questionsAttempted || 0),
+        correctAnswers: Number(correctAnswers || 0),
+        incorrectAnswers: Number(incorrectAnswers || 0),
+        wordsPronouncedCorrectly: Array.isArray(wordsPronouncedCorrectly)
+          ? wordsPronouncedCorrectly.map(String)
+          : [],
+        wordsNeedingImprovement: Array.isArray(wordsNeedingImprovement)
+          ? wordsNeedingImprovement.map(String)
+          : [],
+        wordsImprovedOnRetry: Array.isArray(wordsImprovedOnRetry)
+          ? wordsImprovedOnRetry.map(String)
+          : [],
+        readingSpeedWpm: readingSpeedWpm !== undefined ? Number(readingSpeedWpm) : undefined,
+        readingAccuracy: readingAccuracy !== undefined ? Number(readingAccuracy) : undefined,
+        timeSpentMinutes: Math.max(1, Number(timeSpentMinutes || 5)),
+        masteryLevel: computedMastery,
+        recommendedNextActivity: recommendedNextActivity
+          ? String(recommendedNextActivity)
+          : "Continue daily 15-minute practice with Bright Buddy",
         createdAt: new Date().toISOString(),
       };
 
       lms.aiLogs.unshift(newLog);
 
       const prog = getOrCreateStudentProgress(lms, cleanUser, newLog.studentName);
-      prog.learningHours = Number(((prog.learningHours || 0) + 0.3).toFixed(1));
-      if (mode === "reading" || mode === "pronunciation") {
-        prog.readingProgress = Math.min(100, Math.max(prog.readingProgress || 0, Number(score)));
+      const addedHours = Math.max(0.1, Number(((newLog.timeSpentMinutes || 5) / 60).toFixed(2)));
+      prog.learningHours = Number(((prog.learningHours || 0) + addedHours).toFixed(1));
+
+      if (mode === "reading" || mode === "pronunciation" || mode === "speaking") {
+        prog.readingProgress = Math.min(100, Math.max(prog.readingProgress || 0, numScore));
       }
+
       if (improvementArea && !prog.customImprovements.includes(improvementArea)) {
         prog.customImprovements.unshift(improvementArea);
+      }
+      if (Array.isArray(wordsNeedingImprovement) && wordsNeedingImprovement.length > 0) {
+        const wordNote = `Pronunciation & decoding practice needed for: ${wordsNeedingImprovement
+          .slice(0, 5)
+          .join(", ")}`;
+        if (!prog.customImprovements.includes(wordNote)) {
+          prog.customImprovements.unshift(wordNote);
+        }
+      }
+      if (numScore >= 85 && Array.isArray(skillsPractised) && skillsPractised.length > 0) {
+        const strengthNote = `Strong ${mode} performance in: ${skillsPractised.slice(0, 3).join(", ")} (${numScore}%)`;
+        if (!prog.customStrengths.includes(strengthNote)) {
+          prog.customStrengths.unshift(strengthNote);
+        }
       }
 
       if (!prog.badges.some((b) => b.id === "badge-ai-buddy")) {
         prog.badges.unshift({
           id: "badge-ai-buddy",
-          title: "AI Learning Explorer",
-          description: "Practised reading, pronunciation & writing with AI Buddy",
+          title: "Bright Buddy Explorer",
+          description: "Practised reading, writing, speaking & math with Bright Buddy AI Tutor",
           icon: "🤖",
           earnedAt: new Date().toISOString(),
           color: "#06b6d4",

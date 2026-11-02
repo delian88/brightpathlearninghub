@@ -167,15 +167,39 @@ export interface DailyLearningActivity {
   description: string;
 }
 
+export type BrightBuddyMode =
+  | "reading"
+  | "writing"
+  | "speaking"
+  | "math"
+  | "assessment"
+  | "pronunciation"
+  | "chat";
+
+export type MasteryLevel = "Emerging" | "Developing" | "Proficient" | "Mastered";
+
 export interface AiPracticeLog {
   id: string;
   studentUsername: string;
   studentName: string;
-  mode: "reading" | "pronunciation" | "writing" | "chat";
+  mode: BrightBuddyMode;
   topic: string;
   score: number;
   feedback: string;
   improvementArea?: string;
+  // Detailed AI Learning Assessment fields
+  skillsPractised?: string[];
+  questionsAttempted?: number;
+  correctAnswers?: number;
+  incorrectAnswers?: number;
+  wordsPronouncedCorrectly?: string[];
+  wordsNeedingImprovement?: string[];
+  wordsImprovedOnRetry?: string[];
+  readingSpeedWpm?: number;
+  readingAccuracy?: number;
+  timeSpentMinutes?: number;
+  masteryLevel?: MasteryLevel;
+  recommendedNextActivity?: string;
   createdAt: string;
 }
 
