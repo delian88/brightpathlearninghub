@@ -70,96 +70,6 @@ interface PortalAdditionalModulesProps {
   showToast: (msg: string, type?: ToastType) => void;
 }
 
-const DEFAULT_TIMETABLE_TEMPLATE = (courseName: string): TimetableSlot[] => [
-  {
-    id: "def-tt-1",
-    targetStudentUsername: "ALL",
-    dayOfWeek: "Monday",
-    startTime: "16:00",
-    endTime: "16:45",
-    subject: courseName || "English Phonics & Reading",
-    topic: "1-on-1 Live Phonics, Blending & Guided Reading",
-    teacherName: "Bright Path Senior Literacy Educator",
-    meetingUrl: "https://meet.google.com/new",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "def-tt-2",
-    targetStudentUsername: "ALL",
-    dayOfWeek: "Wednesday",
-    startTime: "16:00",
-    endTime: "16:45",
-    subject: "Creative Writing & Grammar",
-    topic: "Sentence Construction, Spelling & Vocabulary Practice",
-    teacherName: "Bright Path Writing Specialist",
-    meetingUrl: "https://meet.google.com/new",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "def-tt-3",
-    targetStudentUsername: "ALL",
-    dayOfWeek: "Friday",
-    startTime: "16:00",
-    endTime: "16:45",
-    subject: "Mathematics & SuperSpeakers Oratory",
-    topic: "Problem Solving & Confidence-Building Public Speaking",
-    teacherName: "Bright Path STEM & Oratory Coach",
-    meetingUrl: "https://meet.google.com/new",
-    createdAt: new Date().toISOString(),
-  },
-];
-
-const DEFAULT_LEARNING_MATERIALS: LearningMaterialResource[] = [
-  {
-    id: "def-mat-1",
-    title: "Phonics Sounds, Digraphs & Blending Master Worksheet",
-    description: "Printable & interactive phonics practice sheet covering sh, ch, th, ph, and vowel teams.",
-    subject: "English / Phonics",
-    grade: "All Grades",
-    category: "PDF Worksheet",
-    fileUrl: "#printable-worksheet-phonics",
-    targetStudentUsername: "ALL",
-    uploadedBy: "Bright Path Curriculum Team",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "def-mat-2",
-    title: "Sight Words & Sentence Writing Practice Pack",
-    description: "Guided handwriting, capitalization, and creative story starter templates.",
-    subject: "Writing",
-    grade: "All Grades",
-    category: "PDF Worksheet",
-    fileUrl: "#printable-worksheet-writing",
-    targetStudentUsername: "ALL",
-    uploadedBy: "Bright Path Curriculum Team",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "def-mat-3",
-    title: "Mental Math, Multiplication & Word Problems Guide",
-    description: "Step-by-step visual guide for addition, subtraction, multiplication tables, and word problems.",
-    subject: "Mathematics",
-    grade: "All Grades",
-    category: "Study Guide",
-    fileUrl: "#printable-worksheet-math",
-    targetStudentUsername: "ALL",
-    uploadedBy: "Bright Path STEM Team",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "def-mat-4",
-    title: "SuperSpeakers Audio Pronunciation & Storytelling Drill",
-    description: "Listen aloud to clear British/International English articulation and storytelling cadence.",
-    subject: "Public Speaking",
-    grade: "All Grades",
-    category: "Audio Phonics / Story",
-    fileUrl: "#audio-pronunciation-drill",
-    targetStudentUsername: "ALL",
-    uploadedBy: "Bright Path Oratory Coach",
-    createdAt: new Date().toISOString(),
-  },
-];
-
 export default function PortalAdditionalModules({
   activeModule,
   studentAccount,
@@ -228,7 +138,16 @@ export default function PortalAdditionalModules({
 
   const handleDownloadPrintableWorksheet = (mat: LearningMaterialResource) => {
     if (mat.fileUrl && !mat.fileUrl.startsWith("#printable") && !mat.fileUrl.startsWith("#audio")) {
-      window.open(mat.fileUrl, "_blank");
+      if (mat.fileUrl.startsWith("data:")) {
+        const a = document.createElement("a");
+        a.href = mat.fileUrl;
+        a.download = mat.fileName || mat.title;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else {
+        window.open(mat.fileUrl, "_blank");
+      }
       return;
     }
     if (mat.fileUrl === "#audio-pronunciation-drill") {
@@ -394,10 +313,7 @@ export default function PortalAdditionalModules({
   // 1. MY TIMETABLE: Class Schedules & Upcoming Lessons
   // =========================================================================
   if (activeModule === "timetable") {
-    const activeSlots =
-      timetableSlots.length > 0
-        ? timetableSlots
-        : DEFAULT_TIMETABLE_TEMPLATE(studentAccount.courseName);
+    const activeSlots = timetableSlots;
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -593,7 +509,7 @@ export default function PortalAdditionalModules({
   // 3. LEARNING MATERIALS: Download Worksheets, PDFs, Videos & Audio
   // =========================================================================
   if (activeModule === "materials") {
-    const allMats = [...learningMaterials, ...DEFAULT_LEARNING_MATERIALS];
+    const allMats = learningMaterials;
     const filteredMats =
       matCategoryFilter === "ALL"
         ? allMats

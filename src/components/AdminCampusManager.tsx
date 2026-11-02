@@ -53,6 +53,7 @@ const row: React.CSSProperties = {
 
 export default function AdminCampusManager({ section, lmsData, students, onRefresh, showToast }: Props) {
   const tab = section;
+  const [fileName, setFileName] = useState("");
   const [pfSubjects, setPfSubjects] = useState("");
   const [pfGoals, setPfGoals] = useState("");
   const [pfBio, setPfBio] = useState("");
@@ -90,6 +91,7 @@ export default function AdminCampusManager({ section, lmsData, students, onRefre
           setText("");
           setText2("");
           setUrl("");
+          setFileName("");
         }
         onRefresh();
       } else {
@@ -375,7 +377,35 @@ export default function AdminCampusManager({ section, lmsData, students, onRefre
                 <option value="Study Guide">Study Guide</option>
               </select>
             </div>
-            {input("File / video URL", url, setUrl, "url", "https://…")}
+            <div className="form-group">
+              <label className="form-label">Upload from your computer (max 3 MB)</label>
+              <input
+                type="file"
+                className="form-input"
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.mp3,.wav,.m4a,.mp4,.webm"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  if (f.size > 3 * 1024 * 1024) {
+                    showToast("File is too large. Please use a file under 3 MB or paste a link instead.", "warning");
+                    e.target.value = "";
+                    return;
+                  }
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    setUrl(String(reader.result));
+                    setFileName(f.name);
+                    if (!text.trim()) setText(f.name.replace(/\.[^.]+$/, ""));
+                    if (f.type.startsWith("video/")) setCategory("Video Lesson");
+                    else if (f.type.startsWith("audio/")) setCategory("Audio Phonics / Story");
+                    else if (f.type === "application/pdf") setCategory("PDF Worksheet");
+                  };
+                  reader.readAsDataURL(f);
+                }}
+              />
+              {fileName && <div style={{ fontSize: "0.75rem", color: "#059669", marginTop: 4 }}>Selected: {fileName}</div>}
+            </div>
+            {fileName ? null : input("...or paste a file / video link", url, setUrl, "url", "https://…")}
             {input("Description", text2, setText2)}
           </div>
           <button
@@ -383,7 +413,7 @@ export default function AdminCampusManager({ section, lmsData, students, onRefre
             disabled={busy}
             onClick={() => {
               if (!text.trim() || !url.trim()) {
-                showToast("Enter a title and file URL.", "warning");
+                showToast("Upload a file or paste a link, and enter a title.", "warning");
                 return;
               }
               post({
@@ -393,6 +423,7 @@ export default function AdminCampusManager({ section, lmsData, students, onRefre
                 subject: subject || undefined,
                 category: category || "PDF Worksheet",
                 fileUrl: url,
+                fileName: fileName || undefined,
                 targetStudentUsername: target,
               });
             }}
