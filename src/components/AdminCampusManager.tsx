@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import type { LmsStateData } from "@/lib/lmsData";
 import type { ToastType } from "./ToastNotification";
 
-type CampusTab = "timetable" | "attendance" | "materials" | "messages" | "support" | "calendar";
+type CampusTab = "announcements" | "timetable" | "attendance" | "materials" | "messages" | "support" | "calendar";
 
 interface Props {
   lmsData: LmsStateData;
@@ -14,6 +14,7 @@ interface Props {
 }
 
 const TABS: { id: CampusTab; label: string }[] = [
+  { id: "announcements", label: "Announcements" },
   { id: "timetable", label: "Timetable" },
   { id: "attendance", label: "Attendance" },
   { id: "materials", label: "Learning Materials" },
@@ -49,7 +50,7 @@ const row: React.CSSProperties = {
 };
 
 export default function AdminCampusManager({ lmsData, students, onRefresh, showToast }: Props) {
-  const [tab, setTab] = useState<CampusTab>("timetable");
+  const [tab, setTab] = useState<CampusTab>("announcements");
   const [busy, setBusy] = useState(false);
 
   // shared target student ("ALL" or username)
@@ -160,6 +161,50 @@ export default function AdminCampusManager({ lmsData, students, onRefresh, showT
           </button>
         ))}
       </div>
+
+      {tab === "announcements" && (
+        <>
+          <div style={grid}>
+            {targetSelect(true)}
+            {input("Title", text, setText)}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Message (All students = school-wide)</label>
+            <textarea className="form-input" rows={3} value={text2} onChange={(e) => setText2(e.target.value)} />
+          </div>
+          <button
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={() => {
+              if (!text.trim() || !text2.trim()) {
+                showToast("Enter a title and message.", "warning");
+                return;
+              }
+              post({
+                action: "post-announcement",
+                targetStudentUsername: target,
+                type: "announcement",
+                title: text,
+                message: text2,
+              });
+            }}
+          >
+            Post Announcement
+          </button>
+          <div style={{ display: "grid", gap: 8, marginTop: 16 }}>
+            {(lmsData.notifications || []).length === 0 && empty("No announcements yet.")}
+            {(lmsData.notifications || []).slice(0, 20).map((n) => (
+              <div key={n.id} style={{ ...row, flexDirection: "column", alignItems: "flex-start" }}>
+                <span>
+                  <b>{n.title}</b> ·{" "}
+                  {n.targetStudentUsername === "ALL" ? "School-wide" : nameOf(n.targetStudentUsername)}
+                </span>
+                <span style={{ color: "#475569" }}>{n.message}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {tab === "timetable" && (
         <>
