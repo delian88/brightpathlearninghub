@@ -147,6 +147,36 @@ export async function GET(request: Request) {
         .sort((a, b) => b.totalPoints - a.totalPoints)
         .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
+      const myTimetable = (lms.timetableSlots || []).filter(
+        (t) =>
+          t.targetStudentUsername === "ALL" ||
+          t.targetStudentUsername.toUpperCase() === studentUsername
+      );
+
+      const myAttendanceLogs = (lms.attendanceLogs || []).filter(
+        (a) => a.studentUsername.toUpperCase() === studentUsername
+      );
+
+      const myMaterials = (lms.learningMaterials || []).filter(
+        (m) =>
+          m.targetStudentUsername === "ALL" ||
+          m.targetStudentUsername.toUpperCase() === studentUsername
+      );
+
+      const myMessages = (lms.messages || []).filter(
+        (m) => m.studentUsername.toUpperCase() === studentUsername
+      );
+
+      const mySupportTickets = (lms.supportTickets || []).filter(
+        (t) => t.studentUsername.toUpperCase() === studentUsername
+      );
+
+      const customCalendarEvents = (lms.calendarEvents || []).filter(
+        (ev) =>
+          ev.targetStudentUsername === "ALL" ||
+          ev.targetStudentUsername.toUpperCase() === studentUsername
+      );
+
       return NextResponse.json({
         success: true,
         assignments: assignedHomework,
@@ -157,6 +187,12 @@ export async function GET(request: Request) {
         aiLogs: myAiLogs,
         leaderboard,
         leaderboardSettings,
+        timetableSlots: myTimetable,
+        attendanceLogs: myAttendanceLogs,
+        learningMaterials: myMaterials,
+        messages: myMessages,
+        supportTickets: mySupportTickets,
+        calendarEvents: customCalendarEvents,
       });
     }
 
@@ -199,6 +235,8 @@ export async function POST(request: Request) {
         dueDate,
         scheduledPublishDate,
         assignmentStatus = "Published",
+        assessmentCategory = "homework",
+        timeLimitMinutes,
         allowLateSubmission = true,
         allowResubmission = true,
         questions = [],
@@ -264,6 +302,13 @@ export async function POST(request: Request) {
         dueDate:
           dueDate || new Date(Date.now() + 4 * 86400000).toISOString().split("T")[0],
         scheduledPublishDate: scheduledPublishDate ? String(scheduledPublishDate) : undefined,
+        assessmentCategory:
+          assessmentCategory === "quiz" ||
+          assessmentCategory === "test" ||
+          assessmentCategory === "examination"
+            ? assessmentCategory
+            : "homework",
+        timeLimitMinutes: timeLimitMinutes ? Number(timeLimitMinutes) : undefined,
         totalPoints,
         passingScore: Number(passingScore || 60),
         assignmentStatus: statusFlag,
@@ -888,6 +933,10 @@ export async function POST(request: Request) {
         activeDaysOfWeek,
         leaderboardPrivacy,
         earlyYearsFocusMode,
+        enrolledSubjects,
+        learningGoals,
+        bioNote,
+        liveClassroomUrl,
       } = body;
 
       const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
@@ -954,6 +1003,18 @@ export async function POST(request: Request) {
       }
       if (earlyYearsFocusMode !== undefined) {
         prog.earlyYearsFocusMode = Boolean(earlyYearsFocusMode);
+      }
+      if (Array.isArray(enrolledSubjects)) {
+        prog.enrolledSubjects = enrolledSubjects;
+      }
+      if (Array.isArray(learningGoals)) {
+        prog.learningGoals = learningGoals;
+      }
+      if (bioNote !== undefined) {
+        prog.bioNote = String(bioNote);
+      }
+      if (liveClassroomUrl !== undefined) {
+        prog.liveClassroomUrl = String(liveClassroomUrl);
       }
 
       prog.updatedAt = new Date().toISOString();
@@ -1331,6 +1392,315 @@ export async function POST(request: Request) {
         message: "Leaderboard & privacy settings updated!",
         leaderboardSettings: lms.leaderboardSettings,
       });
+    }
+
+    // 11. ADDITIONAL MODULES: TIMETABLE MANAGEMENT
+    if (action === "save-timetable-slot") {
+      const {
+        targetStudentUsername = "ALL",
+        dayOfWeek = "Monday",
+        startTime = "16:00",
+        endTime = "16:45",
+        subject = "English Phonics & Reading",
+        topic = "1-on-1 Live Interactive Session",
+        teacherName = "Bright Path Class Educator",
+        meetingUrl = "https://meet.google.com/new",
+      } = body;
+
+      if (!lms.timetableSlots) lms.timetableSlots = [];
+      const slot = {
+        id: `tt-${Date.now()}`,
+        targetStudentUsername: String(targetStudentUsername).toUpperCase(),
+        dayOfWeek,
+        startTime: String(startTime),
+        endTime: String(endTime),
+        subject: String(subject),
+        topic: String(topic),
+        teacherName: String(teacherName),
+        meetingUrl: String(meetingUrl),
+        createdAt: new Date().toISOString(),
+      };
+      lms.timetableSlots.unshift(slot);
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message: "Class schedule slot added to timetable!",
+        slot,
+      });
+    }
+
+    if (action === "delete-timetable-slot") {
+      const { slotId } = body;
+      lms.timetableSlots = (lms.timetableSlots || []).filter((s) => s.id !== slotId);
+      await saveLmsData(lms);
+      return NextResponse.json({ success: true, message: "Timetable slot removed." });
+    }
+
+    // 12. ADDITIONAL MODULES: ATTENDANCE RECORDS & ABSENCE HISTORY
+    if (action === "record-attendance") {
+      const {
+        studentUsername,
+        studentName = "Bright Scholar",
+        date = new Date().toISOString().split("T")[0],
+        subject = "English Phonics & Reading",
+        status = "Present",
+        absenceReason = "",
+        teacherNote = "",
+        recordedBy = "Bright Path Class Teacher",
+      } = body;
+
+      const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
+      if (!lms.attendanceLogs) lms.attendanceLogs = [];
+      const entry = {
+        id: `att-${Date.now()}`,
+        studentUsername: cleanUser,
+        studentName: String(studentName),
+        date: String(date),
+        subject: String(subject),
+        status: status as "Present" | "Late" | "Excused" | "Absent",
+        absenceReason: String(absenceReason || ""),
+        teacherNote: String(teacherNote || ""),
+        recordedBy: String(recordedBy),
+        createdAt: new Date().toISOString(),
+      };
+      lms.attendanceLogs.unshift(entry);
+
+      // Update student's overall attendanceRate automatically
+      const studentLogs = lms.attendanceLogs.filter(
+        (a) => a.studentUsername.toUpperCase() === cleanUser
+      );
+      if (studentLogs.length > 0) {
+        const presentOrExcused = studentLogs.filter(
+          (a) => a.status === "Present" || a.status === "Late" || a.status === "Excused"
+        ).length;
+        const prog = getOrCreateStudentProgress(lms, cleanUser, String(studentName));
+        prog.attendanceRate = Math.round((presentOrExcused / studentLogs.length) * 100);
+        if (status === "Present" || status === "Late") {
+          prog.lessonsCompleted = (prog.lessonsCompleted || 0) + 1;
+        }
+        lms.progressRecords[cleanUser] = prog;
+      }
+
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message: `Attendance (${status}) recorded for ${studentName}!`,
+        entry,
+      });
+    }
+
+    // 13. ADDITIONAL MODULES: LEARNING MATERIALS (WORKSHEETS, PDFS, VIDEOS, AUDIO)
+    if (action === "save-learning-material") {
+      const {
+        title,
+        description = "",
+        subject = "English Phonics & Reading",
+        grade = "All Grades",
+        category = "PDF Worksheet",
+        fileUrl = "",
+        fileName = "",
+        targetStudentUsername = "ALL",
+        uploadedBy = "Bright Path Teacher",
+      } = body;
+
+      if (!lms.learningMaterials) lms.learningMaterials = [];
+      const mat = {
+        id: `mat-${Date.now()}`,
+        title: String(title || "Learning Resource"),
+        description: String(description),
+        subject: String(subject),
+        grade: String(grade),
+        category: category as
+          | "PDF Worksheet"
+          | "Video Lesson"
+          | "Audio Phonics / Story"
+          | "Study Guide",
+        fileUrl: String(fileUrl),
+        fileName: String(fileName || ""),
+        targetStudentUsername: String(targetStudentUsername).toUpperCase(),
+        uploadedBy: String(uploadedBy),
+        createdAt: new Date().toISOString(),
+      };
+      lms.learningMaterials.unshift(mat);
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message: `Learning material "${mat.title}" published!`,
+        material: mat,
+      });
+    }
+
+    if (action === "delete-learning-material") {
+      const { materialId } = body;
+      lms.learningMaterials = (lms.learningMaterials || []).filter(
+        (m) => m.id !== materialId
+      );
+      await saveLmsData(lms);
+      return NextResponse.json({ success: true, message: "Material removed." });
+    }
+
+    // 14. ADDITIONAL MODULES: TWO-WAY TEACHER–PARENT MESSAGING
+    if (action === "send-portal-message") {
+      const {
+        studentUsername,
+        studentName = "Bright Scholar",
+        parentName = "Parent / Guardian",
+        senderRole = "parent",
+        senderName = "Parent",
+        subject = "Academic Update",
+        message,
+      } = body;
+
+      if (!message) {
+        return NextResponse.json(
+          { success: false, message: "Please enter a message." },
+          { status: 400 }
+        );
+      }
+
+      const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
+      if (!lms.messages) lms.messages = [];
+      const msgObj = {
+        id: `msg-${Date.now()}`,
+        studentUsername: cleanUser,
+        studentName: String(studentName),
+        parentName: String(parentName),
+        senderRole: senderRole as "parent" | "student" | "teacher",
+        senderName: String(senderName),
+        subject: String(subject || "Direct Message"),
+        message: String(message),
+        createdAt: new Date().toISOString(),
+      };
+      lms.messages.unshift(msgObj);
+
+      if (senderRole === "teacher") {
+        lms.notifications.unshift({
+          id: `notif-msg-${Date.now()}`,
+          targetStudentUsername: cleanUser,
+          type: "announcement",
+          title: `💬 New Message from Teacher: ${subject}`,
+          message: String(message).slice(0, 140),
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message:
+          senderRole === "teacher"
+            ? `Message sent to ${studentName} & Parent!`
+            : "Message sent to your Bright Path Teacher!",
+        portalMessage: msgObj,
+      });
+    }
+
+    // 15. ADDITIONAL MODULES: SUPPORT CENTRE (HELP REQUESTS & TECHNICAL SUPPORT)
+    if (action === "create-support-ticket") {
+      const {
+        studentUsername,
+        studentName = "Bright Scholar",
+        category = "Technical Support",
+        subject,
+        description,
+      } = body;
+
+      if (!subject || !description) {
+        return NextResponse.json(
+          { success: false, message: "Please enter a subject and description." },
+          { status: 400 }
+        );
+      }
+
+      const cleanUser = String(studentUsername || "STUDENT").toUpperCase();
+      if (!lms.supportTickets) lms.supportTickets = [];
+      const ticket = {
+        id: `tkt-${Date.now()}`,
+        ticketRef: `BPTK-${Math.floor(1000 + Math.random() * 9000)}`,
+        studentUsername: cleanUser,
+        studentName: String(studentName),
+        category: category as
+          | "Technical Support"
+          | "Class Reschedule"
+          | "Academic / Homework Help"
+          | "Account & Portal",
+        subject: String(subject),
+        description: String(description),
+        status: "Open" as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      lms.supportTickets.unshift(ticket);
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message: `Support request #${ticket.ticketRef} submitted! Our team will respond shortly.`,
+        ticket,
+      });
+    }
+
+    if (action === "resolve-support-ticket") {
+      const { ticketId, adminReply = "", status = "Resolved" } = body;
+      const tkt = (lms.supportTickets || []).find((t) => t.id === ticketId);
+      if (tkt) {
+        tkt.adminReply = String(adminReply);
+        tkt.status = status as "Open" | "In Progress" | "Resolved";
+        tkt.updatedAt = new Date().toISOString();
+        lms.notifications.unshift({
+          id: `notif-tkt-${Date.now()}`,
+          targetStudentUsername: tkt.studentUsername,
+          type: "announcement",
+          title: `🛠️ Support Request #${tkt.ticketRef} Updated (${status})`,
+          message: adminReply || "Your support request has been updated.",
+          createdAt: new Date().toISOString(),
+        });
+        await saveLmsData(lms);
+      }
+      return NextResponse.json({
+        success: true,
+        message: "Support ticket updated!",
+        ticket: tkt,
+      });
+    }
+
+    // 16. ADDITIONAL MODULES: ACADEMIC CALENDAR EVENTS
+    if (action === "save-calendar-event") {
+      const {
+        title,
+        date = new Date().toISOString().split("T")[0],
+        category = "School Event",
+        description = "",
+        targetStudentUsername = "ALL",
+      } = body;
+
+      if (!lms.calendarEvents) lms.calendarEvents = [];
+      const ev = {
+        id: `cal-${Date.now()}`,
+        title: String(title || "Academic Event"),
+        date: String(date),
+        category: category as
+          | "Homework Deadline"
+          | "Examination / Assessment"
+          | "Live Class"
+          | "School Event",
+        description: String(description),
+        targetStudentUsername: String(targetStudentUsername).toUpperCase(),
+        createdAt: new Date().toISOString(),
+      };
+      lms.calendarEvents.unshift(ev);
+      await saveLmsData(lms);
+      return NextResponse.json({
+        success: true,
+        message: `Calendar event "${ev.title}" added!`,
+        event: ev,
+      });
+    }
+
+    if (action === "delete-calendar-event") {
+      const { eventId } = body;
+      lms.calendarEvents = (lms.calendarEvents || []).filter((e) => e.id !== eventId);
+      await saveLmsData(lms);
+      return NextResponse.json({ success: true, message: "Calendar event removed." });
     }
 
     return NextResponse.json(

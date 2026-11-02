@@ -31,6 +31,7 @@ import {
   downloadCertificatePdf,
 } from "@/lib/pdfReportGenerator";
 import type { ToastType } from "./ToastNotification";
+import AdminCampusManager from "./AdminCampusManager";
 
 interface AdminLmsManagerProps {
   activeSection: "lms-homework" | "lms-progress" | "lms-reports";
@@ -191,6 +192,8 @@ export default function AdminLmsManager({
   // 1. MODULE B: TEACHER HOMEWORK & ASSIGNMENT BUILDER STATE (No hardcoded demo data)
   // ==========================================================================
   const [hwTitle, setHwTitle] = useState("");
+  const [hwCategory, setHwCategory] = useState<"homework" | "quiz" | "test" | "examination">("homework");
+  const [hwTimeLimit, setHwTimeLimit] = useState(0);
   const [hwDescription, setHwDescription] = useState("");
   const [hwCourse, setHwCourse] = useState("English Phonics & Reading");
   const [hwSubject, setHwSubject] = useState("English Phonics & Reading");
@@ -663,6 +666,8 @@ export default function AdminLmsManager({
         body: JSON.stringify({
           action: "create-homework",
           title: hwTitle,
+          assessmentCategory: hwCategory,
+          timeLimitMinutes: hwTimeLimit > 0 ? hwTimeLimit : undefined,
           description: hwDescription,
           courseName: hwCourse,
           subject: hwSubject,
@@ -1418,6 +1423,31 @@ export default function AdminLmsManager({
                   value={hwTitle}
                   onChange={(e) => setHwTitle(e.target.value)}
                   required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Assessment Type</label>
+                <select
+                  className="form-select"
+                  value={hwCategory}
+                  onChange={(e) => setHwCategory(e.target.value as any)}
+                >
+                  <option value="homework">Homework</option>
+                  <option value="quiz">Quick Quiz</option>
+                  <option value="test">Topic Test</option>
+                  <option value="examination">Termly Examination</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Time Limit (mins, 0 = none)</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="form-input"
+                  value={hwTimeLimit}
+                  onChange={(e) => setHwTimeLimit(Number(e.target.value) || 0)}
                 />
               </div>
 
@@ -2638,8 +2668,16 @@ export default function AdminLmsManager({
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        {/* =================================================================
-            1. EARLY-WARNING RADAR: STUDENTS STRUGGLING / FLAGGED FOR ATTENTION
+        <AdminCampusManager
+          lmsData={lmsData}
+          students={allRealStudents.map((s: any) => ({
+            username: s.username,
+            studentName: s.studentName,
+          }))}
+          onRefresh={onRefresh}
+          showToast={showToast}
+        />
+        {/* =================================================================            1. EARLY-WARNING RADAR: STUDENTS STRUGGLING / FLAGGED FOR ATTENTION
             ================================================================= */}
         <div
           className="admin-panel-card"

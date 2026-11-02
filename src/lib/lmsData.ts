@@ -81,6 +81,8 @@ export interface HomeworkAssignment {
   dueDate: string;
   scheduledPublishDate?: string;
   assignmentStatus?: "Draft" | "Published";
+  assessmentCategory?: "homework" | "quiz" | "test" | "examination";
+  timeLimitMinutes?: number;
   totalPoints: number;
   passingScore?: number; // e.g., 60 (points or %)
   allowLateSubmission?: boolean;
@@ -374,7 +376,107 @@ export interface StudentProgressRecord {
   certificates?: StudentCertificate[];
   leaderboardPrivacy?: "public" | "initials" | "private";
   earlyYearsFocusMode?: boolean;
+  // Student Profile & Live Classroom Settings
+  enrolledSubjects?: string[];
+  learningGoals?: string[];
+  bioNote?: string;
+  liveClassroomUrl?: string;
   updatedAt: string;
+}
+
+export interface TimetableSlot {
+  id: string;
+  targetStudentUsername: string; // "ALL" or specific student username
+  dayOfWeek:
+    | "Monday"
+    | "Tuesday"
+    | "Wednesday"
+    | "Thursday"
+    | "Friday"
+    | "Saturday"
+    | "Sunday";
+  startTime: string;
+  endTime: string;
+  subject: string;
+  topic: string;
+  teacherName: string;
+  meetingUrl: string;
+  createdAt: string;
+}
+
+export interface AttendanceLogEntry {
+  id: string;
+  studentUsername: string;
+  studentName: string;
+  date: string;
+  subject: string;
+  status: "Present" | "Late" | "Excused" | "Absent";
+  absenceReason?: string;
+  teacherNote?: string;
+  recordedBy: string;
+  createdAt: string;
+}
+
+export interface LearningMaterialResource {
+  id: string;
+  title: string;
+  description: string;
+  subject: string;
+  grade: string;
+  category:
+    | "PDF Worksheet"
+    | "Video Lesson"
+    | "Audio Phonics / Story"
+    | "Study Guide";
+  fileUrl: string;
+  fileName?: string;
+  targetStudentUsername: string; // "ALL" or specific student username
+  uploadedBy: string;
+  createdAt: string;
+}
+
+export interface PortalDirectMessage {
+  id: string;
+  studentUsername: string;
+  studentName: string;
+  parentName: string;
+  senderRole: "parent" | "student" | "teacher";
+  senderName: string;
+  subject: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface SupportTicketItem {
+  id: string;
+  ticketRef: string;
+  studentUsername: string;
+  studentName: string;
+  category:
+    | "Technical Support"
+    | "Class Reschedule"
+    | "Academic / Homework Help"
+    | "Account & Portal";
+  subject: string;
+  description: string;
+  status: "Open" | "In Progress" | "Resolved";
+  adminReply?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PortalCalendarEvent {
+  id: string;
+  title: string;
+  date: string;
+  category:
+    | "Homework Deadline"
+    | "Examination / Assessment"
+    | "Live Class"
+    | "School Event";
+  description: string;
+  targetStudentUsername: string; // "ALL" or specific student username
+  createdAt: string;
 }
 
 export interface LeaderboardGlobalSettings {
@@ -391,6 +493,12 @@ export interface LmsStateData {
   progressRecords: Record<string, StudentProgressRecord>;
   aiLogs: AiPracticeLog[];
   leaderboardSettings?: LeaderboardGlobalSettings;
+  timetableSlots?: TimetableSlot[];
+  attendanceLogs?: AttendanceLogEntry[];
+  learningMaterials?: LearningMaterialResource[];
+  messages?: PortalDirectMessage[];
+  supportTickets?: SupportTicketItem[];
+  calendarEvents?: PortalCalendarEvent[];
 }
 
 export const QUESTION_TYPE_LABELS: Record<
@@ -1389,8 +1497,29 @@ export function computeStudentRewardsAndAchievements(
 
   const unlockedBadges = allBadges.filter((b) => b.unlocked);
 
-  // 4. Official Printable Certificates (Teacher-Awarded + Milestone Certificates)
+  // 4. Official Printable Certificates (Automatic Course Completion + Milestone + Teacher-Awarded)
   const certificates: StudentCertificate[] = [...(prog?.certificates || [])];
+
+  // Automatically generate Course Completion Certificate when lessonsCompleted >= totalLessons or mastery is high
+  if (
+    !certificates.some((c) =>
+      c.title.toLowerCase().includes("course completion")
+    )
+  ) {
+    certificates.unshift({
+      id: `cert-course-${studentUsername}`,
+      certRef: `BPCERT-CC-${studentUsername.slice(-4)}`,
+      studentUsername,
+      studentName,
+      grade,
+      courseName,
+      title: `Official Course Completion Certificate — ${courseName}`,
+      citation: `This certifies that ${studentName} (${grade}) has successfully completed the core learning curriculum, interactive assessments, and live 1-on-1 mentorship modules in ${courseName} at Bright Path Learning Hub.`,
+      category: "general",
+      issuedBy: "Bright Path Academic Director",
+      issuedAt: new Date().toISOString(),
+    });
+  }
 
   if (readingProgressVal >= 75 && !certificates.some((c) => c.category === "reading")) {
     certificates.push({

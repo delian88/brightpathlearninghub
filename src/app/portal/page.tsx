@@ -41,6 +41,7 @@ import StudentHomeworkModule from "@/components/StudentHomeworkModule";
 import BrightBuddyModule from "@/components/BrightBuddyModule";
 import StudentProgressModule from "@/components/StudentProgressModule";
 import StudentRewardsModule from "@/components/StudentRewardsModule";
+import PortalAdditionalModules from "@/components/PortalAdditionalModules";
 import {
   DEFAULT_AVATARS,
   READING_PRACTICE_PASSAGES,
@@ -66,7 +67,32 @@ type PortalTab =
   | "reports"
   | "badges"
   | "notifications"
-  | "parent-monitor";
+  | "parent-monitor"
+  | "timetable"
+  | "attendance"
+  | "materials"
+  | "classroom"
+  | "assessments"
+  | "messages"
+  | "announcements"
+  | "certificates"
+  | "profile"
+  | "support"
+  | "calendar";
+
+const ADDITIONAL_PORTAL_TABS: { id: PortalTab; label: string; title: string; subtitle: string }[] = [
+  { id: "timetable", label: "My Timetable", title: "My Timetable", subtitle: "Class schedules and upcoming lessons." },
+  { id: "attendance", label: "Attendance", title: "Attendance Records", subtitle: "Attendance records and absence history." },
+  { id: "materials", label: "Learning Materials", title: "Learning Materials", subtitle: "Download worksheets, PDFs, videos and audio." },
+  { id: "classroom", label: "Online Classroom", title: "Online Classroom", subtitle: "Join scheduled live lessons." },
+  { id: "assessments", label: "Assessments", title: "Assessments", subtitle: "Tests, quizzes and examinations." },
+  { id: "messages", label: "Messaging", title: "Teacher–Parent Messaging", subtitle: "Communicate with your teacher." },
+  { id: "announcements", label: "Announcements", title: "Announcements", subtitle: "School-wide and class announcements." },
+  { id: "certificates", label: "Certificates", title: "Certificates", subtitle: "Course completion certificates." },
+  { id: "profile", label: "Student Profile", title: "Student Profile", subtitle: "Personal details, class, subjects and learning goals." },
+  { id: "support", label: "Support Centre", title: "Support Centre", subtitle: "Help requests and technical support." },
+  { id: "calendar", label: "Calendar", title: "Calendar", subtitle: "Homework deadlines, examinations and events." },
+];
 
 const DAILY_ACTIVITIES = [
   {
@@ -136,6 +162,12 @@ export default function StudentPortalPage() {
     hideForEarlyYears: true,
   });
   const [syncingLms, setSyncingLms] = useState(false);
+  const [timetableSlots, setTimetableSlots] = useState<any[]>([]);
+  const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
+  const [learningMaterials, setLearningMaterials] = useState<any[]>([]);
+  const [portalMessages, setPortalMessages] = useState<any[]>([]);
+  const [supportTickets, setSupportTickets] = useState<any[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
 
   // Homework Taking State
   const [activeHomework, setActiveHomework] = useState<HomeworkAssignment | null>(null);
@@ -227,6 +259,12 @@ export default function StudentPortalPage() {
         setNotifications(data.notifications || []);
         setProgress(data.progress || null);
         setAiLogs(data.aiLogs || []);
+        setTimetableSlots(data.timetableSlots || []);
+        setAttendanceLogs(data.attendanceLogs || []);
+        setLearningMaterials(data.learningMaterials || []);
+        setPortalMessages(data.messages || []);
+        setSupportTickets(data.supportTickets || []);
+        setCalendarEvents(data.calendarEvents || []);
         if (Array.isArray(data.leaderboard)) setLeaderboard(data.leaderboard);
         if (data.leaderboardSettings) setLeaderboardSettings(data.leaderboardSettings);
       }
@@ -924,7 +962,7 @@ export default function StudentPortalPage() {
   // ============================================================================
   // AUTHENTICATED STUDENT & PARENT DASHBOARD (PROFESSIONAL SIDEBAR + TOP NAVBAR)
   // ============================================================================
-  const TAB_META: Record<PortalTab, { title: string; subtitle: string }> = {
+  const TAB_META: Record<string, { title: string; subtitle: string }> = {
     home: {
       title: "Student Learning Dashboard",
       subtitle: "Overview of your classes, daily learning activities, homework, and Bright Buddy AI tutor.",
@@ -965,6 +1003,9 @@ export default function StudentPortalPage() {
       title: "Parent & Guardian Academic Monitor",
       subtitle: `Track ${studentAccount.studentName}'s attendance, AI practice sessions, homework scores, and teacher diagnostics.`,
     },
+    ...(Object.fromEntries(
+      ADDITIONAL_PORTAL_TABS.map((t) => [t.id, { title: t.title, subtitle: t.subtitle }])
+    ) as Record<string, { title: string; subtitle: string }>),
   };
 
   const selectPortalTab = (tab: PortalTab) => {
@@ -1246,6 +1287,21 @@ export default function StudentPortalPage() {
               <span>Parent Monitor</span>
             </span>
           </button>
+
+          <div className="admin-nav-section-label">School Campus</div>
+          {ADDITIONAL_PORTAL_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => selectPortalTab(t.id)}
+              className={`admin-nav-item ${activeTab === t.id ? "active" : ""}`}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <LayoutDashboard size={17} />
+                <span>{t.label}</span>
+              </span>
+            </button>
+          ))}
         </nav>
 
         {/* Sidebar Footer */}
@@ -3208,6 +3264,27 @@ export default function StudentPortalPage() {
             leaderboard={leaderboard}
             leaderboardSettings={leaderboardSettings}
             onProfileUpdated={() => fetchStudentLmsData(studentAccount)}
+            showToast={showToast}
+          />
+        )}
+
+        {ADDITIONAL_PORTAL_TABS.some((t) => t.id === activeTab) && (
+          <PortalAdditionalModules
+            activeModule={activeTab as any}
+            studentAccount={studentAccount}
+            progress={progress}
+            assignments={assignments}
+            submissions={submissions}
+            aiLogs={aiLogs}
+            notifications={notifications}
+            timetableSlots={timetableSlots}
+            attendanceLogs={attendanceLogs}
+            learningMaterials={learningMaterials}
+            messages={portalMessages}
+            supportTickets={supportTickets}
+            calendarEvents={calendarEvents}
+            portalRole={portalRole}
+            onRefresh={() => fetchStudentLmsData(studentAccount)}
             showToast={showToast}
           />
         )}
