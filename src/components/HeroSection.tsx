@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { Star, MessageCircle, CheckCircle2, Trophy, ShieldCheck, ArrowRight } from "lucide-react";
+import { Star, MessageCircle, CheckCircle2, Trophy, ShieldCheck, ArrowRight, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { useSiteContent } from "@/context/SiteContentContext";
 import ToastNotification, { type ToastData, type ToastType } from "@/components/ToastNotification";
 
@@ -36,6 +36,45 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
   const [wordIndex, setWordIndex] = useState(0);
   const [displayText, setDisplayText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Video Autoplay & Audio State
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isMuted, setIsMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(true);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = true;
+      videoRef.current.play().catch(() => {
+        // Autoplay policy prevented playback until user interaction
+        setIsPlaying(false);
+      });
+    }
+  }, []);
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      const nextMuted = !videoRef.current.muted;
+      videoRef.current.muted = nextMuted;
+      setIsMuted(nextMuted);
+      if (videoRef.current.paused) {
+        videoRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  const toggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      } else {
+        videoRef.current.requestFullscreen().catch(() => {});
+      }
+    }
+  };
 
   useEffect(() => {
     const currentWord = rotatingWords[wordIndex % rotatingWords.length];
@@ -246,7 +285,7 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
 
           {/* Right Visual Showcase */}
           <div className="hero-visual-wrapper">
-            <div className="hero-main-card">
+            <div className="hero-main-card" style={{ padding: "18px 16px 20px" }}>
               {/* Floating Badge 1 */}
               <div className="hero-floating-badge badge-pos-1">
                 <div
@@ -265,26 +304,150 @@ export default function HeroSection({ onOpenBooking }: HeroSectionProps) {
                 </div>
               </div>
 
-              {/* Logo Presentation */}
-              <div className="hero-logo-showcase" style={{ position: "relative" }}>
-                <Image
-                  src="/logo.png"
-                  alt="Bright Path Learning Hub Official Seal"
-                  width={180}
-                  height={180}
-                  style={{ objectFit: "contain", width: "100%", height: "100%" }}
-                  priority
+              {/* Video Player Presentation (Plays natively, no Facebook indicators) */}
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  aspectRatio: "9/16",
+                  maxHeight: "440px",
+                  borderRadius: "18px",
+                  overflow: "hidden",
+                  boxShadow: "0 14px 34px rgba(11, 37, 69, 0.22)",
+                  background: "#071527",
+                  border: "3px solid #ffffff",
+                  margin: "0 auto",
+                }}
+              >
+                <video
+                  ref={videoRef}
+                  src="/videos/hero-showcase.mp4"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  disablePictureInPicture
+                  controlsList="nodownload nofullscreen noremoteplayback"
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
                 />
+
+                {/* Overlaid Sound Toggle Button */}
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: 12,
+                    right: 12,
+                    display: "flex",
+                    gap: 8,
+                    zIndex: 5,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={toggleMute}
+                    aria-label={isMuted ? "Unmute video sound" : "Mute video sound"}
+                    style={{
+                      background: "rgba(10, 25, 49, 0.82)",
+                      backdropFilter: "blur(6px)",
+                      color: "#ffffff",
+                      border: "1px solid rgba(255, 255, 255, 0.25)",
+                      borderRadius: "999px",
+                      padding: "8px 14px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                      transition: "transform 0.2s ease, background 0.2s ease",
+                    }}
+                  >
+                    {isMuted ? (
+                      <>
+                        <VolumeX size={15} color="#fbbf24" />
+                        <span>Tap for Sound</span>
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 size={15} color="#10b981" />
+                        <span>Sound On</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={toggleFullscreen}
+                    aria-label="Expand video"
+                    style={{
+                      background: "rgba(10, 25, 49, 0.82)",
+                      backdropFilter: "blur(6px)",
+                      color: "#ffffff",
+                      border: "1px solid rgba(255, 255, 255, 0.25)",
+                      borderRadius: "999px",
+                      width: 34,
+                      height: 34,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                    }}
+                  >
+                    <Maximize2 size={15} />
+                  </button>
+                </div>
+
+                {/* Subtle Live Session Watermark Badge */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    left: 12,
+                    background: "rgba(10, 25, 49, 0.85)",
+                    backdropFilter: "blur(6px)",
+                    borderRadius: "999px",
+                    padding: "4px 10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                    color: "#ffffff",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    zIndex: 5,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: "#10b981",
+                      display: "inline-block",
+                      boxShadow: "0 0 8px #10b981",
+                    }}
+                  />
+                  <span>Bright Path Live Student</span>
+                </div>
               </div>
 
               <div style={{ marginTop: 12 }}>
-                <h3 style={{ fontSize: "1.25rem", color: "var(--bp-navy-950)", fontWeight: 800 }}>
+                <h3 style={{ fontSize: "1.15rem", color: "var(--bp-navy-950)", fontWeight: 800 }}>
                   {hero.sealTitle}
                 </h3>
-                <p style={{ fontSize: "0.85rem", color: "var(--bp-green-600)", fontWeight: 700 }}>
+                <p style={{ fontSize: "0.84rem", color: "var(--bp-green-600)", fontWeight: 700 }}>
                   {hero.sealBadge}
                 </p>
-                <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginTop: 6 }}>
+                <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginTop: 4 }}>
                   {hero.sealDescription}
                 </p>
               </div>
